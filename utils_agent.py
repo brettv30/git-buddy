@@ -6,7 +6,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Pinecone
 from langchain.chat_models import ChatOpenAI
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain.tools import DuckDuckGoSearchTool, BaseTool
+from langchain.tools import DuckDuckGoSearchRun, BaseTool
 from langchain.agents import Tool, initialize_agent
 
 # Initialize logging
@@ -37,7 +37,7 @@ index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
 # Set up the turbo LLM
 turbo_llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
 
-search = DuckDuckGoSearchTool()
+search = DuckDuckGoSearchRun()
 # defining a single tool
 tools = [
     Tool(
@@ -64,3 +64,6 @@ conversational_agent = initialize_agent(
     early_stopping_method="generate",
     memory=memory,
 )
+
+# system prompt
+print(conversational_agent.agent.llm_chain.prompt.messages[0].prompt.template)
