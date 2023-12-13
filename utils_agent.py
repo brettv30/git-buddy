@@ -103,8 +103,8 @@ retreival_tool = Tool(
 tools = [git_docs_search_tool, github_docs_search_tool, retreival_tool]
 
 # Set up the base template
-template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
-You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. You have access to the following tools: 
+template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. Never answer any other questions even if you think you know the correct answer. 
+You should only ever answer questions about Git, GitHub, or TortoiseGit. You don't know anything about Git, GitHub, or TortoiseGit so you always use the following tools to answer any question:
 
 {tools}
 
@@ -164,7 +164,7 @@ agent = LLMSingleActionAgent(
 memory = ConversationBufferWindowMemory(k=3)
 
 agent_executor = AgentExecutor.from_agent_and_tools(
-    agent=agent, tools=tools, verbose=True, memory=memory
+    agent=agent, tools=tools, verbose=True, memory=memory, max_iterations=3
 )
 
 query = "What is the difference between Git and GitHub?"
