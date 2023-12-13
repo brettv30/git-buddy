@@ -66,33 +66,3 @@ embeddings = OpenAIEmbeddings(model=embeddings_model)
 
 # This actually loads the data/embeddings into your index
 index = Pinecone.from_documents(docs, embeddings, index_name=index_name)
-
-# chat completion llm
-llm = ChatOpenAI(model_name=llm_model, temperature=0.1)
-# retrieval qa chain
-qa = RetrievalQA.from_chain_type(
-    llm=llm, chain_type="stuff", retriever=index.as_retriever()
-)
-
-# Create Tools for Agent
-tools = load_tools([], llm=llm)
-
-tools.append(
-    Tool.from_function(
-        func=qa.run,
-        name="Git Buddy",
-        description="use this tool when answering any question related to Git, GitHub, or TortoiseGit.",
-    )
-)
-
-# Initialize Agent
-agent = initialize_agent(
-    agent="chat-conversational-react-description",
-    tools=tools,
-    llm=llm,
-    verbose=True,
-    max_iterations=2,
-    early_stopping_method="generate",
-)
-
-print(agent("What is GitHub?")["output"])
