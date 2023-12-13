@@ -8,7 +8,9 @@ from langchain.chat_models import ChatOpenAI
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.tools import DuckDuckGoSearchRun, BaseTool
 from langchain.agents import Tool, initialize_agent
+from langchain.chains import LLMChain
 from CustomPromptTemplate import *
+from CustomOutputParser import *
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -34,9 +36,6 @@ if not OPENAI_API_KEY or not PINECONE_API_KEY:
 pinecone.init(api_key=PINECONE_API_KEY, environment="gcp-starter")
 embeddings = OpenAIEmbeddings(model=EMBEDDINGS_MODEL)
 index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
-
-# Set up the turbo LLM
-turbo_llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
 
 search = DuckDuckGoSearchRun()
 
@@ -81,6 +80,9 @@ Final Answer: the final answer to the original input question
 
 Begin! Remember to answer as a helpful assistant when giving your final answer.
 
+Previous conversation history:
+{history}
+
 Question: {input}
 {agent_scratchpad}"""
 
@@ -89,21 +91,29 @@ prompt = CustomPromptTemplate(
     tools=tools,
     # This omits the `agent_scratchpad`, `tools`, and `tool_names` variables because those are generated dynamically
     # This includes the `intermediate_steps` variable because that is needed
-    input_variables=["input", "intermediate_steps"],
+    input_variables=["input", "intermediate_steps", "history"],
+)
+
+output_parser = CustomOutputParser()
+
+# Set up the LLM
+llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
+
+# LLM chain consisting of the LLM and a prompt
+llm_chain = LLMChain(llm=llm, prompt=prompt)
+
+tool_names = [tool.name for tool in tools]
+
+agent = LLMSingleActionAgent(
+    llm_chain=llm_chain,
+    output_parser=output_parser,
+    stop=["\nObservation:"],
+    allowed_tools=tool_names,
 )
 
 # conversational agent memory
-memory = ConversationBufferWindowMemory(
-    memory_key="chat_history", k=3, return_messages=True
-)
+memory = ConversationBufferWindowMemory(k=3)
 
-# create our agent
-conversational_agent = initialize_agent(
-    agent="chat-conversational-react-description",
-    tools=tools,
-    llm=turbo_llm,
-    verbose=True,
-    max_iterations=3,
-    early_stopping_method="generate",
-    memory=memory,
+agent_executor = AgentExecutor.from_agent_and_tools(
+    agent=agent, tools=tools, verbose=True, memory=memory
 )
