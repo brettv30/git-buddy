@@ -3,7 +3,7 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Pinecone
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
-from langchain.chains import RetrievalQA, LLMChain
+from langchain.chains import LLMChain
 import pinecone
 from dotenv import load_dotenv
 import os
