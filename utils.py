@@ -16,7 +16,6 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 
 # Set Const Variables
 EMBEDDINGS_MODEL = "text-embedding-ada-002"
