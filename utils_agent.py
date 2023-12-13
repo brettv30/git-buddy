@@ -165,7 +165,6 @@ agent_executor = AgentExecutor.from_agent_and_tools(
 def run_agent(query):
     try:
         response = agent_executor.run(input=query)
-        print(response)
     except ValueError as e:
         response = str(e)
         if not response.startswith("Could not parse LLM output: `"):
@@ -173,4 +172,5 @@ def run_agent(query):
         response = response.removeprefix("Could not parse LLM output: `").removesuffix(
             "`"
         )
-        print(response)
+
+    return response

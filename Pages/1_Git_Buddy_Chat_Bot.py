@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import *
+from utils_agent import *
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -32,7 +32,7 @@ if (
 ):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            chat_response = get_answer(st.session_state.messages[-1]["content"])
+            chat_response = run_agent(st.session_state.messages[-1]["content"])
 
             # Write the agent's response to the chat
             st.write(chat_response)
