@@ -38,16 +38,50 @@ index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
 turbo_llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
 
 search = DuckDuckGoSearchRun()
-# defining a single tool
+
+
+def duck_wrapper_github(input_text):
+    search_results = search.run(f"site:https://docs.github.com/en {input_text}")
+    return search_results
+
+
+def duck_wrapper_git(input_text):
+    search_results = search.run(f"site:https://git-scm.com {input_text}")
+    return search_results
+
+
 tools = [
     Tool(
-        name="search",
-        func=search.run,
-        description="Useful for when you need to provide links for documentation pulled from the Pinecone database.",
+        name="Search GitHub",
+        func=duck_wrapper_github,
+        description="Useful for when you need to answer GitHub documentation",
     )
 ]
 
-tools = [search]
+tools = ["Search GitHub"]
+
+
+# Set up the base template
+template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
+You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. You have access to the following tools: 
+
+{tools}
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin! Remember to answer as a helpful assistant when giving your final answer.
+
+Question: {input}
+{agent_scratchpad}"""
 
 # conversational agent memory
 memory = ConversationBufferWindowMemory(
@@ -64,6 +98,3 @@ conversational_agent = initialize_agent(
     early_stopping_method="generate",
     memory=memory,
 )
-
-# system prompt
-print(conversational_agent.agent.llm_chain.prompt.messages[0].prompt.template)
