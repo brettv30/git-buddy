@@ -8,6 +8,7 @@ from langchain.chat_models import ChatOpenAI
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.tools import DuckDuckGoSearchRun, BaseTool
 from langchain.agents import Tool, initialize_agent
+from CustomPromptTemplate import *
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -82,6 +83,14 @@ Begin! Remember to answer as a helpful assistant when giving your final answer.
 
 Question: {input}
 {agent_scratchpad}"""
+
+prompt = CustomPromptTemplate(
+    template=template,
+    tools=tools,
+    # This omits the `agent_scratchpad`, `tools`, and `tool_names` variables because those are generated dynamically
+    # This includes the `intermediate_steps` variable because that is needed
+    input_variables=["input", "intermediate_steps"],
+)
 
 # conversational agent memory
 memory = ConversationBufferWindowMemory(

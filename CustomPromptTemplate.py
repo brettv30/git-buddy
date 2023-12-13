@@ -5,7 +5,7 @@ from langchain.agents import (
     AgentOutputParser,
 )
 from langchain.prompts import StringPromptTemplate
-from typing import List, Union
+from typing import List
 
 
 # Set up a prompt template
