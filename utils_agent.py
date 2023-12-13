@@ -161,15 +161,16 @@ agent_executor = AgentExecutor.from_agent_and_tools(
     agent=agent, tools=tools, verbose=True, memory=memory, max_iterations=3
 )
 
-query = "What is a Git Merge?"
-langchain.debug = True
-try:
-    response = agent_executor.run(input=query)
-    print(response)
-except ValueError as e:
-    response = str(e)
-    if not response.startswith("Could not parse LLM output: `"):
-        raise e
-    response = response.removeprefix("Could not parse LLM output: `").removesuffix("`")
-    print(response)
-langchain.debug = False
+
+def run_agent(query):
+    try:
+        response = agent_executor.run(input=query)
+        print(response)
+    except ValueError as e:
+        response = str(e)
+        if not response.startswith("Could not parse LLM output: `"):
+            raise e
+        response = response.removeprefix("Could not parse LLM output: `").removesuffix(
+            "`"
+        )
+        print(response)
