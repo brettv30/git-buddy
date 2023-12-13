@@ -50,6 +50,15 @@ index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
 
 search = DuckDuckGoSearchRun()
 
+# Set up the LLM
+llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
+
+# Set up additional Retreival LLM tool
+retreival_prompt = PromptTemplate(
+    input_variables=["context", "input"], template=PROMPT_TEMPLATE
+)
+qa_llm = LLMChain(llm=llm, prompt=retreival_prompt, verbose=True)
+
 
 def duck_wrapper_github(input_text):
     search_results = search.run(f"site:https://docs.github.com/en {input_text}")
@@ -61,7 +70,7 @@ def duck_wrapper_git(input_text):
     return search_results
 
 
-def get_similar_docs(query: str, k: int = 3, score: bool = False) -> list:
+def get_similar_docs(query, k=3, score=False):
     """Retrieve similar documents from the index based on the given query."""
     return (
         index.similarity_search_with_score(query, k=k)
@@ -70,15 +79,10 @@ def get_similar_docs(query: str, k: int = 3, score: bool = False) -> list:
     )
 
 
-def retreive_answer(query: str) -> str:
+def retreive_answer(input_text):
     """Generate an answer based on similar documents and the provided query."""
-    similar_docs = get_similar_docs(query)
-    answer = qa_llm.run(
-        {
-            "context": similar_docs,
-            "input": query,
-        }
-    )
+    similar_docs = get_similar_docs(input_text)
+    answer = qa_llm.run({"context": similar_docs, "input": input_text})
     return answer
 
 
@@ -95,7 +99,7 @@ git_docs_search_tool = Tool(
 )
 
 retreival_tool = Tool(
-    name="Document Retreiver",
+    name="Document Retriever",
     func=retreive_answer,
     description="Useful for when you need to look up documentation before answering a question related to Git, GitHub, or TortoiseGit",
 )
@@ -108,7 +112,7 @@ You should only ever answer questions about Git, GitHub, or TortoiseGit. You don
 
 {tools}
 
-Always use the Document Retreiver tool first before attempting to use other tools.
+Always use the Document Retreiver tool first before attempting to use other tools. Only use the other tools to provide the website link to documents found by the document retreiver tool.
 Use the following format:
 
 Question: the input question you must answer
@@ -138,18 +142,8 @@ prompt = CustomPromptTemplate(
 
 output_parser = CustomOutputParser()
 
-# Set up the LLM
-llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
-
 # LLM chain consisting of the LLM and a prompt
 llm_chain = LLMChain(llm=llm, prompt=prompt)
-
-# Set up additional Retreival LLM tool
-retreival_prompt = PromptTemplate(
-    input_variables=["context", "input"], template=PROMPT_TEMPLATE
-)
-qa_llm = LLMChain(llm=llm, prompt=retreival_prompt, verbose=True)
-
 
 tool_names = [tool.name for tool in tools]
 
@@ -167,7 +161,7 @@ agent_executor = AgentExecutor.from_agent_and_tools(
     agent=agent, tools=tools, verbose=True, memory=memory, max_iterations=3
 )
 
-query = "What is the difference between Git and GitHub?"
+query = "What is a Git Merge?"
 langchain.debug = True
 try:
     response = agent_executor.run(input=query)
