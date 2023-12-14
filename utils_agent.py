@@ -120,12 +120,13 @@ Thought: you should always think about what to do
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input question you must answer
 Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times until the observation answers the input question)
+... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the answer to the question
 Final Observation: 
 
+Remember, you are helping beginners! When providing the Final Observation please be sure to provide as much information as possible. Don't summarize anything.
 
-Begin! Remember to answer as a helpful assistant when giving your final answer. Always provide the final observation as your final answer.
+Begin! 
 
 Previous conversation history:
 {history}
