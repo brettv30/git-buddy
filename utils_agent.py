@@ -118,11 +118,10 @@ Use the following format:
 Question: the input question you must answer
 Thought: you should always think about what to do
 Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
+Action Input: the input question you must answer
 Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+... (this Thought/Action/Action Input/Observation can repeat N times until the observation answers the input question)
+
 
 Begin! Remember to answer as a helpful assistant when giving your final answer. Always provide the final Observation as your final answer.
 
