@@ -112,7 +112,7 @@ You should only ever answer questions about Git, GitHub, or TortoiseGit. You don
 
 {tools}
 
-Always use the Document Retriever tool first before attempting to use other tools. If you think the answer from the Document Retriever is insufficient in anyway then you can use the other tools to help craft an answer. Otherwise, only use the other tools to provide website links to the documents found and referenced by the document retriever tool.
+Always use the Document Retriever tool first before attempting to use other tools. If you think the answer from the Document Retriever is insufficient in any way then you can use the other tools to help craft an answer. Otherwise, only use the other tools to provide website links to the documents found and referenced by the document retriever tool.
 Use the following format:
 
 Question: the input question you must answer
@@ -124,7 +124,7 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
-Begin! Remember to answer as a helpful assistant when giving your final answer. 
+Begin! Remember to answer as a helpful assistant when giving your final answer. Always provide the final Observation as your final answer.
 
 Previous conversation history:
 {history}
