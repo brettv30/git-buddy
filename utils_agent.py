@@ -158,7 +158,12 @@ agent = LLMSingleActionAgent(
 memory = ConversationBufferWindowMemory(k=3)
 
 agent_executor = AgentExecutor.from_agent_and_tools(
-    agent=agent, tools=tools, verbose=True, memory=memory, max_iterations=3
+    agent=agent,
+    tools=tools,
+    verbose=True,
+    memory=memory,
+    max_iterations=3,
+    early_stopping_method="generate",
 )
 
 
