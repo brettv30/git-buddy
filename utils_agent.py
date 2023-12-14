@@ -121,9 +121,11 @@ Action: the action to take, should be one of [{tool_names}]
 Action Input: the input question you must answer
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times until the observation answers the input question)
+Thought: I now know the answer to the question
+Final Observation: 
 
 
-Begin! Remember to answer as a helpful assistant when giving your final answer. Always provide the final Observation as your final answer.
+Begin! Remember to answer as a helpful assistant when giving your final answer. Always provide the final observation as your final answer.
 
 Previous conversation history:
 {history}

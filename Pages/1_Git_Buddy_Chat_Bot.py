@@ -34,9 +34,9 @@ if (
         with st.spinner("Thinking..."):
             chat_response = run_agent(st.session_state.messages[-1]["content"])
 
-            if chat_response.startswith("I now know the final answer."):
+            if chat_response.startswith("I now know the answwer to the question."):
                 chat_response = chat_response.removeprefix(
-                    "I now know the final answer."
+                    "I now know the answer to the question."
                 )
 
             # Write the agent's response to the chat
