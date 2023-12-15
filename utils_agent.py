@@ -51,7 +51,7 @@ index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
 search = DuckDuckGoSearchRun()
 
 # Set up the LLM
-llm = ChatOpenAI(temperature=0.5, model_name=MODEL_NAME)
+llm = ChatOpenAI(temperature=0.5, streaming=True, model_name=MODEL_NAME)
 
 # Set up additional Retreival LLM tool
 retreival_prompt = PromptTemplate(
@@ -65,8 +65,8 @@ def duck_wrapper_github(input_text):
     return search_results
 
 
-def duck_wrapper_git(input_text):
-    search_results = search.run(f"site:https://git-scm.com {input_text}")
+def duck_wrapper_search(input_text):
+    search_results = search.run(f"{input_text}")
     return search_results
 
 
@@ -92,10 +92,10 @@ github_docs_search_tool = Tool(
     description="Useful for when you need to answer questions related to GitHub documentation",
 )
 
-git_docs_search_tool = Tool(
-    name="Search Git",
-    func=duck_wrapper_git,
-    description="Useful for when you need to answer questions related to Git documentation",
+search_tool = Tool(
+    name="Search",
+    func=duck_wrapper_search,
+    description="Useful for when you need to answer questions that require internet access",
 )
 
 retreival_tool = Tool(
@@ -104,7 +104,7 @@ retreival_tool = Tool(
     description="Useful for when you need to look up documentation before answering a question related to Git, GitHub, or TortoiseGit",
 )
 
-tools = [git_docs_search_tool, github_docs_search_tool, retreival_tool]
+tools = [search_tool, github_docs_search_tool, retreival_tool]
 
 # Set up the base template
 template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. Never answer any other questions even if you think you know the correct answer. 
@@ -120,6 +120,10 @@ Thought: you should always think about what to do
 Action: the action to take, should be one of [{tool_names}]
 Action Input: the input question you must answer
 Observation: the result of the action
+Thought: think about what to do next
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the source from the metadata found in the result of the first Action
+Observation: the result of the second action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the answer to the question
 Final Observation: 
@@ -169,9 +173,9 @@ agent_executor = AgentExecutor.from_agent_and_tools(
 )
 
 
-def run_agent(query):
+def run_agent(query, callback):
     try:
-        response = agent_executor.run(input=query)
+        response = agent_executor.run(input=query, callbacks=[callback])
     except ValueError as e:
         response = str(e)
         if not response.startswith("Could not parse LLM output: `"):

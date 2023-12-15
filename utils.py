@@ -4,10 +4,12 @@ from langchain.vectorstores import Pinecone
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
+from langchain.tools import DuckDuckGoSearchResults
 import pinecone
 from dotenv import load_dotenv
 import os
 import logging
+import re
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -22,11 +24,8 @@ EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
 PROMPT_TEMPLATE = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
-You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. Only use the serpAPI tool to provide links to additional documentation. Never use the serpAPI tool to search the web to answer a question unrelated to Git, GitHub, or TortoiseGit.
-Do the following when responding to questions:
-    If possible, please provide example code
-    Always provide the name of the file you pulled an answer from if you pulled an answer from the context
-    When you provide the name of the file you pulled an answer from, use the serpAPI tool to provide the actual link where you can find the exact information on the internet
+You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
+If possible, please provide example code and always provide the name of the file you pulled an answer from if you pulled an answer from the context.
 
 If a question is ambiguous please refer to the conversation history to see if that helps in answering the question at the end:
  {chat_history}
@@ -35,7 +34,8 @@ Use the following pieces of context to answer the question at the end:
 {context}
 
 Question: {human_input}
-Answer:"""
+Answer:
+Source(s):"""
 
 # Validate environment variables
 if not OPENAI_API_KEY or not PINECONE_API_KEY:
@@ -61,6 +61,8 @@ prompt = PromptTemplate(
 )
 qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
 
+search = DuckDuckGoSearchResults()
+
 
 def get_similar_docs(query: str, k: int = 3, score: bool = False) -> list:
     """Retrieve similar documents from the index based on the given query."""
@@ -71,9 +73,30 @@ def get_similar_docs(query: str, k: int = 3, score: bool = False) -> list:
     )
 
 
+def get_sources(docs: str) -> str:
+    # Extracting 'source' from each item's metadata
+    sources = [doc["metadata"]["source"] for doc in docs]
+
+    return sources
+
+
 def get_answer(query: str) -> str:
     """Generate an answer based on similar documents and the provided query."""
     similar_docs = get_similar_docs(query)
+    print(similar_docs[0].metadata["source"])
+    # Regular expression to extract information between '\' and '.'
+    pattern = r"\\(.*?)\."
+    match = re.search(pattern, similar_docs[0].metadata["source"])
+
+    if match:
+        result = match.group(1)
+        print("Extracted text:", result)
+
+        search_results = search.run(f"{result}")
+        print(search_results)
+    else:
+        print("No match found")
+
     answer = qa_llm.run(
         {
             "context": similar_docs,
@@ -82,3 +105,6 @@ def get_answer(query: str) -> str:
         }
     )
     return answer
+
+
+print(get_answer("What are GitHub Issues?"))

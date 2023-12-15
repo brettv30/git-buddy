@@ -1,4 +1,6 @@
 import streamlit as st
+import langchain
+from langchain.callbacks import StreamlitCallbackHandler
 from utils_agent import *
 
 # Start Streamlit app
@@ -32,9 +34,13 @@ if (
 ):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            chat_response = run_agent(st.session_state.messages[-1]["content"])
+            st_callback = StreamlitCallbackHandler(st.container())
+            langchain.debug = True
+            chat_response = run_agent(
+                st.session_state.messages[-1]["content"], st_callback
+            )
 
-            if chat_response.startswith("I now know the answwer to the question."):
+            if chat_response.startswith("I now know the answer to the question."):
                 chat_response = chat_response.removeprefix(
                     "I now know the answer to the question."
                 )
@@ -48,3 +54,5 @@ if (
                 "content": chat_response,
             }
             st.session_state.messages.append(message)
+
+    langchain.debug = False
