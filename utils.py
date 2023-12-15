@@ -112,16 +112,17 @@ def get_answer(query: str) -> str:
     similar_docs = get_similar_docs(query)
     sources = get_sources(similar_docs)
     queries = get_search_query(sources)
-    for query in queries:
-        if "GitHub Docs" in query:
-            search_results = search.run(f"site:https://docs.github.com/en {query}")
+    for link in queries:
+        print(link)
+        if "GitHub Docs" in link:
+            search_results = search.run(f"site:https://docs.github.com/en {link}")
             urls = parse_urls(search_results)
-        elif "progit" in query:
-            search_results = search.run(f"site:https://git-scm.com/docs {query}")
+        elif "progit" in link:
+            search_results = search.run(f"site:https://git-scm.com/docs {link}")
             urls = parse_urls(search_results)
-        elif "Tortoise" in query:
+        elif "Tortoise" in link:
             search_results = search.run(
-                f"site:https://tortoisegit.org/support/faq/ {query}"
+                f"site:https://tortoisegit.org/support/faq/ {link}"
             )
             urls = parse_urls(search_results)
         else:
