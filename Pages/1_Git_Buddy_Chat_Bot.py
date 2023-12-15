@@ -35,18 +35,14 @@ if (
 ):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            st_callback = StreamlitCallbackHandler(st.container())
-
             # From Utils_agent
-
+            # st_callback = StreamlitCallbackHandler(st.container())
             # chat_response = run_agent(
             #     st.session_state.messages[-1]["content"], st_callback
             # )
 
             # From Utils
-            chat_response = get_answer(
-                st.session_state.messages[-1]["content"], st_callback
-            )
+            chat_response = get_answer(st.session_state.messages[-1]["content"])
 
             if chat_response.startswith("I now know the answer to the question."):
                 chat_response = chat_response.removeprefix(

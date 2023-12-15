@@ -108,7 +108,7 @@ def parse_urls(search_results: str):
     return urls
 
 
-def get_answer(query: str, callback) -> str:
+def get_answer(query: str) -> str:
     """Generate an answer based on similar documents and the provided query."""
     similar_docs = get_similar_docs(query)
     sources = get_sources(similar_docs)
@@ -117,7 +117,6 @@ def get_answer(query: str, callback) -> str:
     url_list = []
 
     for link in queries:
-        print(link)
         if "GitHub Docs" in link:
             search_results = search.run(f"{link}")
             url_list.append(parse_urls(search_results))
@@ -136,10 +135,6 @@ def get_answer(query: str, callback) -> str:
             "human_input": query,
             "chat_history": memory.load_memory_variables({}),
             "url_sources": url_list,
-        },
-        callbacks=[callback],
+        }
     )
     return answer
-
-
-print(get_answer("What is TortoiseGit?"))
