@@ -28,13 +28,13 @@ You should only ever answer questions about Git, GitHub, or TortoiseGit. Never a
 If possible, please provide example code to help the beginner learn Git commands. If URL sources are 
 
 If a question is ambiguous please refer to the conversation history to see if that helps in answering the question at the end:
- {chat_history}
+{chat_history}
 
 Use the following pieces of context to answer the question at the end: 
 {context}
 
 If there are links in the following sources then you MUST link all of the following sources at the end of your answer to the question. You can just keep the entire link in the output, no need to hyperlink with a different name. Do NOT change the links.
- {url_sources}
+{url_sources}
 
 Question: {human_input}
 Answer:"""
@@ -52,7 +52,7 @@ embeddings = OpenAIEmbeddings(model=EMBEDDINGS_MODEL)
 index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
 
 # Set up LangChain
-llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0.5)
+llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0.5, streaming=True)
 memory = ConversationBufferWindowMemory(
     memory_key="chat_history",
     input_key="human_input",
