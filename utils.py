@@ -117,17 +117,8 @@ def get_answer(query: str) -> str:
     url_list = []
 
     for link in queries:
-        if "GitHub Docs" in link:
-            search_results = search.run(f"{link}")
-            url_list.append(parse_urls(search_results))
-        elif "progit" in link:
-            search_results = search.run(f"{link}")
-            url_list.append(parse_urls(search_results))
-        elif "Tortoise" in link:
-            search_results = search.run(f"{link}")
-            url_list.append(parse_urls(search_results))
-        else:
-            continue
+        search_results = search.run(f"{link}")
+        url_list.append(parse_urls(search_results))
 
     answer = qa_llm.run(
         {
