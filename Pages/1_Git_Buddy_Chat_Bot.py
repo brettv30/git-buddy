@@ -2,6 +2,7 @@ import streamlit as st
 import langchain
 from langchain.callbacks import StreamlitCallbackHandler
 from utils_agent import *
+from utils import *
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -35,8 +36,15 @@ if (
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             st_callback = StreamlitCallbackHandler(st.container())
-            langchain.debug = True
-            chat_response = run_agent(
+
+            # From Utils_agent
+
+            # chat_response = run_agent(
+            #     st.session_state.messages[-1]["content"], st_callback
+            # )
+
+            # From Utils
+            chat_response = get_answer(
                 st.session_state.messages[-1]["content"], st_callback
             )
 
@@ -54,5 +62,3 @@ if (
                 "content": chat_response,
             }
             st.session_state.messages.append(message)
-
-    langchain.debug = False

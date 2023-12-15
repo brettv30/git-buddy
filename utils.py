@@ -95,6 +95,7 @@ def get_search_query(sources: list):
         page = re.findall(pattern, source)
         searches.append(page)
 
+    # Grab the unique elements from the searches list
     unique_elements = list(set(element for sublist in searches for element in sublist))
     return unique_elements
 
@@ -107,36 +108,38 @@ def parse_urls(search_results: str):
     return urls
 
 
-def get_answer(query: str) -> str:
+def get_answer(query: str, callback) -> str:
     """Generate an answer based on similar documents and the provided query."""
     similar_docs = get_similar_docs(query)
     sources = get_sources(similar_docs)
     queries = get_search_query(sources)
+
+    url_list = []
+
     for link in queries:
         print(link)
         if "GitHub Docs" in link:
-            search_results = search.run(f"site:https://docs.github.com/en {link}")
-            urls = parse_urls(search_results)
+            search_results = search.run(f"{link}")
+            url_list.append(parse_urls(search_results))
         elif "progit" in link:
-            search_results = search.run(f"site:https://git-scm.com/docs {link}")
-            urls = parse_urls(search_results)
+            search_results = search.run(f"{link}")
+            url_list.append(parse_urls(search_results))
         elif "Tortoise" in link:
-            search_results = search.run(
-                f"site:https://tortoisegit.org/support/faq/ {link}"
-            )
-            urls = parse_urls(search_results)
+            search_results = search.run(f"{link}")
+            url_list.append(parse_urls(search_results))
         else:
-            urls = []
+            continue
 
     answer = qa_llm.run(
         {
             "context": similar_docs,
             "human_input": query,
             "chat_history": memory.load_memory_variables({}),
-            "url_sources": urls,
-        }
+            "url_sources": url_list,
+        },
+        callbacks=[callback],
     )
     return answer
 
 
-print(get_answer("What is Git?"))
+print(get_answer("What is TortoiseGit?"))
