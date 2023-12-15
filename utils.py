@@ -52,7 +52,7 @@ embeddings = OpenAIEmbeddings(model=EMBEDDINGS_MODEL)
 index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
 
 # Set up LangChain
-llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0.5, streaming=True)
+llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0.5)
 memory = ConversationBufferWindowMemory(
     memory_key="chat_history",
     input_key="human_input",
