@@ -101,9 +101,7 @@ def parse_urls(search_results: str) -> list:
     return re.findall(pattern, search_results)
 
 
-def remove_enterprise_string_from_list(
-    nested_list: list, string_to_remove: str
-) -> list:
+def remove_specific_string_from_list(nested_list: list, string_to_remove: str) -> list:
     """
     Removes a specific string from all elements of a nested list.
 
@@ -117,21 +115,39 @@ def remove_enterprise_string_from_list(
     ]
 
 
+def remove_specific_element_from_list(
+    nested_list: list, element_to_remove: str
+) -> list:
+    """
+    Removes a specific element from all sublists of a nested list.
+
+    :param nested_list: List of lists containing elements.
+    :param element_to_remove: Element to be removed from the lists.
+    :return: A new nested list with the specific element removed.
+    """
+    return [
+        [element for element in sublist if element != element_to_remove]
+        for sublist in nested_list
+    ]
+
+
 def get_answer(query: str) -> str:
     """Generate an answer based on similar documents and the provided query."""
     similar_docs = get_similar_docs(index, query)
     sources = get_sources(similar_docs)
     queries = get_search_query(sources)
     url_list = [parse_urls(search.run(f"{link}")) for link in queries]
-    string_to_remove = "/enterprise-server@3.6"
-    updated_list = remove_enterprise_string_from_list(url_list, string_to_remove)
+    string_to_remove = "/enterprise-server@3.6"  # No reason to look at enterprise docs, we just want to look at free version docs
+    updated_list = remove_specific_string_from_list(url_list, string_to_remove)
+    url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # found a dead link, no need to keep including it in the url list
+    clean_url_list = remove_specific_element_from_list(updated_list, url_to_remove)
 
     answer = qa_llm.run(
         {
             "context": similar_docs,
             "human_input": query,
             "chat_history": memory.load_memory_variables({}),
-            "url_sources": updated_list,
+            "url_sources": clean_url_list,
         }
     )
     return answer
