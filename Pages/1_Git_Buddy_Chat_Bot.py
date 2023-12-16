@@ -1,13 +1,13 @@
 import streamlit as st
-import langchain
-from langchain.callbacks import StreamlitCallbackHandler
-from utils_agent import *
 from utils import *
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
 
 st.title("Git Buddy: The chatbot that answers all things Git, GitHub, and TortoiseGit")
+
+# Initialize chatbot components
+index, qa_llm, search, memory = initialize_components()
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -35,19 +35,10 @@ if (
 ):
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            # From Utils_agent
-            # st_callback = StreamlitCallbackHandler(st.container())
-            # chat_response = run_agent(
-            #     st.session_state.messages[-1]["content"], st_callback
-            # )
-
             # From Utils
-            chat_response = get_answer(st.session_state.messages[-1]["content"])
-
-            if chat_response.startswith("I now know the answer to the question."):
-                chat_response = chat_response.removeprefix(
-                    "I now know the answer to the question."
-                )
+            chat_response = get_answer(
+                index, qa_llm, search, memory, st.session_state.messages[-1]["content"]
+            )
 
             # Write the agent's response to the chat
             st.write(chat_response)
