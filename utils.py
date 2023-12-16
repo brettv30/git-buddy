@@ -52,7 +52,7 @@ Answer:
 Additional Sources: Here's some additional sources!"""
 
 # Set the cache
-set_llm_cache(InMemoryCache())
+# set_llm_cache(InMemoryCache())
 
 
 # Initialize Pinecone and LangChain components
