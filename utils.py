@@ -1,9 +1,12 @@
 import os
 import re
+import time
 import pinecone
 from dotenv import load_dotenv
 from langchain.chains import LLMChain
+from langchain.cache import InMemoryCache
 from langchain.vectorstores import Pinecone
+from langchain.globals import set_llm_cache
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.tools import DuckDuckGoSearchResults
@@ -16,6 +19,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 # Set Const Variables
+MODEL_REQUEST_LIMIT_PER_MINUTE = 500
 EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
@@ -47,6 +51,9 @@ Question: {human_input}
 Answer:
 Additional Sources: Here's some additional sources!"""
 
+# Set the cache
+set_llm_cache(InMemoryCache())
+
 
 # Initialize Pinecone and LangChain components
 def initialize_components():
@@ -66,11 +73,11 @@ def initialize_components():
     )
     qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
     search = DuckDuckGoSearchResults()
-    return index, qa_llm, search, memory
+    return prompt, index, qa_llm, search, memory
 
 
 # Initialize chatbot components
-index, qa_llm, search, memory = initialize_components()
+prompt, index, qa_llm, search, memory = initialize_components()
 
 
 def get_similar_docs(index, query: str, k: int = 3, score: bool = False) -> list:
@@ -142,6 +149,20 @@ def get_answer(query: str) -> str:
     url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # found a dead link, no need to keep including it in the url list
     clean_url_list = remove_specific_element_from_list(updated_list, url_to_remove)
 
+    time.sleep(
+        60.0 / MODEL_REQUEST_LIMIT_PER_MINUTE
+    )  # Implement a mandatory sleep time for each request before passing to LLM (this controls hitting request limits)
+
+    # figure out how to implement 60K token rate limit so we don't go over and cause errors
+    print(
+        prompt.format(
+            human_input=query,
+            context=similar_docs,
+            chat_history=memory.load_memory_variables({}),
+            url_sources=clean_url_list,
+        )
+    )
+
     answer = qa_llm.run(
         {
             "context": similar_docs,
@@ -151,3 +172,6 @@ def get_answer(query: str) -> str:
         }
     )
     return answer
+
+
+print(get_answer("What is Git?"))
