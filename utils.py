@@ -69,6 +69,10 @@ def initialize_components():
     return index, qa_llm, search, memory
 
 
+# Initialize chatbot components
+index, qa_llm, search, memory = initialize_components()
+
+
 def get_similar_docs(index, query: str, k: int = 3, score: bool = False) -> list:
     """Retrieve similar documents from the index based on the given query."""
     return (
@@ -97,19 +101,37 @@ def parse_urls(search_results: str) -> list:
     return re.findall(pattern, search_results)
 
 
-def get_answer(index, qa_llm, search, memory, query: str) -> str:
+def remove_enterprise_string_from_list(
+    nested_list: list, string_to_remove: str
+) -> list:
+    """
+    Removes a specific string from all elements of a nested list.
+
+    :param nested_list: List of lists containing strings.
+    :param string_to_remove: String to be removed from each element.
+    :return: A new nested list with the specific string removed from each element.
+    """
+    return [
+        [element.replace(string_to_remove, "") for element in sublist]
+        for sublist in nested_list
+    ]
+
+
+def get_answer(query: str) -> str:
     """Generate an answer based on similar documents and the provided query."""
     similar_docs = get_similar_docs(index, query)
     sources = get_sources(similar_docs)
     queries = get_search_query(sources)
     url_list = [parse_urls(search.run(f"{link}")) for link in queries]
+    string_to_remove = "/enterprise-server@3.6"
+    updated_list = remove_enterprise_string_from_list(url_list, string_to_remove)
 
     answer = qa_llm.run(
         {
             "context": similar_docs,
             "human_input": query,
             "chat_history": memory.load_memory_variables({}),
-            "url_sources": url_list,
+            "url_sources": updated_list,
         }
     )
     return answer
