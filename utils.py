@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import tiktoken
 import pinecone
 from dotenv import load_dotenv
 from langchain.chains import LLMChain
@@ -54,6 +55,8 @@ Additional Sources: Here's some additional sources!"""
 # Set the cache
 # set_llm_cache(InMemoryCache())
 
+enc = tiktoken.get_encoding("cl100k_base")
+
 
 # Initialize Pinecone and LangChain components
 def initialize_components():
@@ -65,7 +68,7 @@ def initialize_components():
     memory = ConversationBufferWindowMemory(
         memory_key="chat_history",
         input_key="human_input",
-        k=2,
+        k=4,
     )
     prompt = PromptTemplate(
         input_variables=["chat_history", "context", "human_input", "url_sources"],
@@ -138,6 +141,12 @@ def remove_specific_element_from_list(
     ]
 
 
+# Placeholder function that we should call when we need to check the number of tokens passed into the model.
+# This should be used to 'throttle' the token input so we don't spend a lot of money or go over our limit. :)
+def check_tokens():
+    return ""
+
+
 def get_answer(query: str) -> str:
     """Generate an answer based on similar documents and the provided query."""
     similar_docs = get_similar_docs(index, query)
@@ -154,14 +163,16 @@ def get_answer(query: str) -> str:
     )  # Implement a mandatory sleep time for each request before passing to LLM (this controls hitting request limits)
 
     # figure out how to implement 60K token rate limit so we don't go over and cause errors
-    print(
-        prompt.format(
-            human_input=query,
-            context=similar_docs,
-            chat_history=memory.load_memory_variables({}),
-            url_sources=clean_url_list,
-        )
+    actual_prompt = prompt.format(
+        human_input=query,
+        context=similar_docs,
+        chat_history=memory.load_memory_variables({}),
+        url_sources=clean_url_list,
     )
+
+    print(len(enc.encode(actual_prompt)))
+    print(type(memory.load_memory_variables({})))
+    print(memory.load_memory_variables({}))
 
     answer = qa_llm.run(
         {
