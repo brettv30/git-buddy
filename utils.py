@@ -5,9 +5,7 @@ import tiktoken
 import pinecone
 from dotenv import load_dotenv
 from langchain.chains import LLMChain
-from langchain.cache import InMemoryCache
 from langchain.vectorstores import Pinecone
-from langchain.globals import set_llm_cache
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.tools import DuckDuckGoSearchResults
@@ -52,9 +50,7 @@ Question: {human_input}
 Answer:
 Additional Sources: Here's some additional sources!"""
 
-# Set the cache
-# set_llm_cache(InMemoryCache())
-
+# Set the encodings to ensure prompt sizing down below
 enc = tiktoken.get_encoding("cl100k_base")
 
 
@@ -102,7 +98,7 @@ def get_search_query(sources: list) -> list:
     pattern = r"\\(.*?)\."
     searches = [re.findall(pattern, source) for source in sources]
     # Flatten list and remove duplicates
-    return list(set(element for sublist in searches for element in sublist))
+    return list({element for sublist in searches for element in sublist})
 
 
 def parse_urls(search_results: str) -> list:
@@ -141,10 +137,41 @@ def remove_specific_element_from_list(
     ]
 
 
-# Placeholder function that we should call when we need to check the number of tokens passed into the model.
-# This should be used to 'throttle' the token input so we don't spend a lot of money or go over our limit. :)
-def check_tokens():
-    return ""
+def reduce_tokens_if_needed(text, max_tokens=60000, target_tokens=40000):
+    """
+    Reduce the number of tokens in a string if it exceeds a specified limit.
+
+    :param text: The input string to be processed.
+    :param max_tokens: The maximum allowed number of tokens.
+    :param target_tokens: The target number of tokens to reduce to if max_tokens is exceeded.
+    :return: A string with the number of tokens within the specified limit.
+    """
+
+    if len(enc.encode(text)) <= max_tokens:
+        return text  # Return the original text if it's within the token limit
+
+    # Find the index in 'chat_history' to start reducing tokens
+    chat_history_index = text.find("{'chat_history':")
+    if chat_history_index == -1:
+        # If 'chat_history' not found, start reduction from the beginning
+        chat_history_index = 0
+
+    # Calculate the number of tokens to remove
+    num_tokens_to_remove = len(enc.encode(text)) - target_tokens
+
+    # Split the text at 'chat_history' and tokenize the chat history part
+    before_chat_history = text[:chat_history_index]
+    chat_history_text = text[chat_history_index:]
+    chat_history_tokens = enc.encode(chat_history_text)
+
+    if num_tokens_to_remove >= len(chat_history_tokens):
+        # If chat history doesn't have enough tokens, return the text from the start of chat history
+        return chat_history_text
+
+    trimmed_chat_history_tokens = chat_history_tokens[:-num_tokens_to_remove]
+    trimmed_chat_history = enc.decode(trimmed_chat_history_tokens)
+
+    return before_chat_history + trimmed_chat_history
 
 
 def get_answer(query: str) -> str:
@@ -170,11 +197,9 @@ def get_answer(query: str) -> str:
         url_sources=clean_url_list,
     )
 
-    print(len(enc.encode(actual_prompt)))
-    print(type(memory.load_memory_variables({})))
-    print(memory.load_memory_variables({}))
+    reduce_tokens_if_needed(actual_prompt)
 
-    answer = qa_llm.run(
+    return qa_llm.run(
         {
             "context": similar_docs,
             "human_input": query,
@@ -182,7 +207,10 @@ def get_answer(query: str) -> str:
             "url_sources": clean_url_list,
         }
     )
-    return answer
 
 
-print(get_answer("What is Git?"))
+print(
+    get_answer(
+        "What is Git and why is it different than GitHub? Give me a compare and contrast of the two things"
+    )
+)
