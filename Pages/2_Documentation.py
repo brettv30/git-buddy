@@ -3,7 +3,7 @@ import streamlit as st
 st.set_page_config(page_title="Documentation")
 
 st.header(
-    "Git Buddy can accesss documentation from the following sources stored in a Pinecone vector database:"
+    "Git Buddy has accesss to the following documentation which are stored as vector embeddings in a Pinecone Vector databse:"
 )
 st.markdown(
     """
