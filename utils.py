@@ -189,15 +189,15 @@ def get_answer(query: str) -> str:
         60.0 / MODEL_REQUEST_LIMIT_PER_MINUTE
     )  # Implement a mandatory sleep time for each request before passing to LLM (this controls hitting request limits)
 
-    # figure out how to implement 60K token rate limit so we don't go over and cause errors
-    actual_prompt = prompt.format(
-        human_input=query,
-        context=similar_docs,
-        chat_history=memory.load_memory_variables({}),
-        url_sources=clean_url_list,
+    # Implement a 60K token rate limiter in case someone wants to throttle the system
+    reduce_tokens_if_needed(
+        prompt.format(
+            human_input=query,
+            context=similar_docs,
+            chat_history=memory.load_memory_variables({}),
+            url_sources=clean_url_list,
+        )
     )
-
-    reduce_tokens_if_needed(actual_prompt)
 
     return qa_llm.run(
         {
@@ -207,10 +207,3 @@ def get_answer(query: str) -> str:
             "url_sources": clean_url_list,
         }
     )
-
-
-print(
-    get_answer(
-        "What is Git and why is it different than GitHub? Give me a compare and contrast of the two things"
-    )
-)
