@@ -1,21 +1,14 @@
 # Build the Knowledge Base
-from langchain.document_loaders import DirectoryLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.chat_models import ChatOpenAI
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain.chains import RetrievalQA
-from langchain.vectorstores import Pinecone
-from langchain.agents import Tool, load_tools, initialize_agent
-from dotenv import load_dotenv
-import os
-import pinecone
 import time
+import pinecone
+import streamlit as st
+from langchain.vectorstores import Pinecone
+from langchain.document_loaders import DirectoryLoader
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-load_dotenv()
-
-openai_api_key_env = os.getenv("OPENAI_API_KEY")
-pinecone_api_key_env = os.getenv("PINECONE_API_KEY")
+openai_api_key_env = st.secrets("OPENAI_API_KEY")
+pinecone_api_key_env = st.secrets("PINECONE_API_KEY")
 directory = "data"
 index_name = "git-buddy-index"
 embeddings_model = "text-embedding-ada-002"
@@ -24,16 +17,14 @@ llm_model = "gpt-3.5-turbo"
 
 def load_docs(directory):
     loader = DirectoryLoader(directory)
-    documents = loader.load()
-    return documents
+    return loader.load()
 
 
 def split_docs(documents, chunk_size=400, chunk_overlap=50):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
-    docs = text_splitter.split_documents(documents)
-    return docs
+    return text_splitter.split_documents(documents)
 
 
 documents = load_docs(directory)
