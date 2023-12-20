@@ -1,9 +1,8 @@
-import os
 import re
 import time
 import tiktoken
 import pinecone
-from dotenv import load_dotenv
+import streamlit as st
 from langchain.chains import LLMChain
 from langchain.vectorstores import Pinecone
 from langchain.chat_models import ChatOpenAI
@@ -12,10 +11,9 @@ from langchain.tools import DuckDuckGoSearchResults
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 
-# Load Environment Variables
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+# Set environment variables
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
 
 # Set Const Variables
 MODEL_REQUEST_LIMIT_PER_MINUTE = 500

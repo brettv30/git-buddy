@@ -24,12 +24,8 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# If last message is not from assistant and we have a key, then respond
-if (
-    st.session_state.messages[-1]["role"]
-    != "assistant"
-    # and st.session_state.openai_api_key
-):
+# If last message is not from assistant, then respond
+if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             # From Utils
