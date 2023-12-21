@@ -7,8 +7,8 @@ from langchain.document_loaders import DirectoryLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-openai_api_key_env = st.secrets("OPENAI_API_KEY")
-pinecone_api_key_env = st.secrets("PINECONE_API_KEY")
+openai_api_key_env = st.secrets["OPENAI_API_KEY"]
+pinecone_api_key_env = st.secrets["PINECONE_API_KEY"]
 directory = "data"
 index_name = "git-buddy-index"
 embeddings_model = "text-embedding-ada-002"
