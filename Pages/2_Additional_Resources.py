@@ -29,18 +29,36 @@ with tab2:
 
 with tab3:
     st.header("Git, GitHub, and TortoiseGit Starter Questions:")
-    st.markdown(
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(
+            """
+        - What is Git?
+        - What is GitHub?
+        - What is TortoiseGit?
+        - Why is GitHub useful?
+        - What is the difference between Git and GitHub?
+        - How can I set up a GitHub repository? 
+        - What are common Git commands and what are they used for?         
+        - What is an Issue? 
+        - What is a Tag? 
+        - What is a release? 
+        - How do I get a remote repository onto my local computer?
         """
-    - What is Git?
-    - What is GitHub?
-    - What is TortoiseGit?
-    - Why is GitHub useful?
-    - What is the difference between Git and GitHub?
-    - How can I set up a GitHub repository? 
-    - What are common Git commands and what are they used for? 
-    - Can you explain branching to me please?
-    - What are GitHub Actions used for? 
-    - What is a Pull Request? 
-    - How do I get a remote repository onto my local computer?
-    """
-    )
+        )
+    with col2:
+        st.markdown(
+            """
+        - Can you explain branching to me please?
+        - What are GitHub Actions used for? 
+        - What is a Pull Request? 
+        - How are projects and milestones tracked in GitHub?
+        - Can you explain the popular branching strategies to me? 
+        - What is the difference between a Commit and a Push?
+        - Why should you always pull before you push to a remote repository?
+        - What are commit messages and how should I write one?
+        - How should I structure my issue description?
+        - How do I merge two branches together?
+        - How do I commit updates using TortoiseGit?
+        """
+        )
