@@ -4,7 +4,7 @@ from utils import *
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
 
-st.title("Git Buddy: The chatbot that answers all things Git, GitHub, and TortoiseGit")
+st.title("Git Buddy")
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():

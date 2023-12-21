@@ -2,6 +2,8 @@ import streamlit as st
 
 st.set_page_config(page_title="Additional Resources")
 
+st.title("Additional Resources")
+
 tab1, tab2, tab3 = st.tabs(["Documentation", "Model Architecture", "Starter Questions"])
 
 with tab1:
