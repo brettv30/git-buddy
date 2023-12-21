@@ -28,7 +28,7 @@ with tab2:
     )
 
 with tab3:
-    st.header("Git, GitHub, and TortoiseGit Starter Questions")
+    st.header("Git, GitHub, and TortoiseGit Starter Questions:")
     st.markdown(
         """
     - What is Git?

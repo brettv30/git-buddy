@@ -4,10 +4,21 @@ st.set_page_config(page_title="Welcome")
 
 st.title("Welcome to Git Buddy!")
 st.subheader("The chatbot that answers all things Git, GitHub, and TortoiseGit")
-st.caption("Author: Brett Vogelsang")
+
+col1, col2, col3 = st.columns([1.25, 0.75, 3.5])
+
+with col1:
+    st.caption("Author: Brett Vogelsang")
+
+with col2:
+    st.link_button("LinkedIn", "https://www.linkedin.com/in/brettvogelsang/")
+
+with col3:
+    st.link_button("GitHub", "https://github.com/brettv30")
+
 st.markdown(
     """
-Git Buddy originated as an idea to utilize a Large Language Model (LLM) as a chatbot tool to assist with teaching others, specifically beginners, about Git, GitHub, and TortoiseGit. If you're not sure where to start or what to ask, please see `Additional Resources - Starter Questions` for some exmaples.
+Git Buddy originated as an idea to utilize a Large Language Model (LLM) as a chatbot tool to assist with teaching others, specifically beginners, about Git, GitHub, and TortoiseGit. Git Buddy's main purpose is to provide a comfortable environment where people starting to learn version control are safe to ask any question that comes to mind. If you're not sure where to start or what to ask, please see `Additional Resources - Starter Questions` for some exmaples.
 
 Git Buddy utilizes the following tools:
 
