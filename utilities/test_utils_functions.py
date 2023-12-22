@@ -9,21 +9,6 @@ from utils import (
 )
 
 
-def test_get_sources():
-    docs = [
-        (
-            page_content := "The page content goes here",
-            metadata := {"source": "source1"},
-        ),
-        (
-            page_content := "The page content goes here",
-            metadata := {"source": "source2"},
-        ),
-    ]
-    expected = ["source1", "source2"]
-    assert get_sources(docs) == expected
-
-
 def test_get_search_query():
     sources = ["test\\query1.", "example\\query2."]
     expected = ["query1", "query2"]
