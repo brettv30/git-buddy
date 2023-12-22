@@ -135,43 +135,6 @@ def remove_specific_element_from_list(
     ]
 
 
-def reduce_tokens_if_needed(text, max_tokens=60000, target_tokens=40000):
-    """
-    Reduce the number of tokens in a string if it exceeds a specified limit.
-
-    :param text: The input string to be processed.
-    :param max_tokens: The maximum allowed number of tokens.
-    :param target_tokens: The target number of tokens to reduce to if max_tokens is exceeded.
-    :return: A string with the number of tokens within the specified limit.
-    """
-
-    if len(enc.encode(text)) <= max_tokens:
-        return text  # Return the original text if it's within the token limit
-
-    # Find the index in 'chat_history' to start reducing tokens
-    chat_history_index = text.find("{'chat_history':")
-    if chat_history_index == -1:
-        # If 'chat_history' not found, start reduction from the beginning
-        chat_history_index = 0
-
-    # Calculate the number of tokens to remove
-    num_tokens_to_remove = len(enc.encode(text)) - target_tokens
-
-    # Split the text at 'chat_history' and tokenize the chat history part
-    before_chat_history = text[:chat_history_index]
-    chat_history_text = text[chat_history_index:]
-    chat_history_tokens = enc.encode(chat_history_text)
-
-    if num_tokens_to_remove >= len(chat_history_tokens):
-        # If chat history doesn't have enough tokens, return the text from the start of chat history
-        return chat_history_text
-
-    trimmed_chat_history_tokens = chat_history_tokens[:-num_tokens_to_remove]
-    trimmed_chat_history = enc.decode(trimmed_chat_history_tokens)
-
-    return before_chat_history + trimmed_chat_history
-
-
 def reduce_chat_history_tokens(chat_history_dict, token_limit=40000):
     """
     Reduces the chat history in the dictionary by two human/AI interactions if the token count exceeds the token_limit.
@@ -184,7 +147,7 @@ def reduce_chat_history_tokens(chat_history_dict, token_limit=40000):
     tokens = enc.encode(chat_history)
     if len(tokens) > token_limit:
         interactions = chat_history.split(
-            "\n"
+            "Human:"
         )  # Assuming each interaction is separated by a newline
         if (
             len(interactions) > 4

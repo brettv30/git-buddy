@@ -1,2 +1,3 @@
 __pycache__
 gitbuddy/
+.pytest_cache/
