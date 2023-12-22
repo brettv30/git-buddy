@@ -172,36 +172,151 @@ def reduce_tokens_if_needed(text, max_tokens=60000, target_tokens=40000):
     return before_chat_history + trimmed_chat_history
 
 
+def reduce_chat_history_tokens(chat_history_dict, token_limit=40000):
+    """
+    Reduces the chat history in the dictionary by two human/AI interactions if the token count exceeds the token_limit.
+
+    :param chat_history_dict: Dictionary containing chat history under the 'chat_history' key.
+    :param token_limit: The target token limit for the chat history.
+    :return: Dictionary with reduced chat history.
+    """
+    chat_history = chat_history_dict.get("chat_history", "")
+    tokens = enc.encode(chat_history)
+    if len(tokens) > token_limit:
+        interactions = chat_history.split(
+            "\n"
+        )  # Assuming each interaction is separated by a newline
+        if (
+            len(interactions) > 4
+        ):  # Check if there are at least two interactions to remove
+            reduced_history = "\n".join(
+                interactions[-4:]
+            )  # Keep the last four interactions (two human/AI cycles)
+            chat_history_dict["chat_history"] = reduced_history
+    return chat_history_dict
+
+
+def reduce_similar_docs_tokens(similar_docs, token_limit=60000):
+    """
+    Reduces the number of documents in similar_docs to ensure the total token count is below the token_limit.
+
+    :param similar_docs: The list of similar documents.
+    :param token_limit: The target token limit for the entire prompt.
+    :return: Reduced list of similar documents.
+    """
+    while len(similar_docs) > 1 and len(enc.encode(str(similar_docs))) > token_limit:
+        similar_docs.pop(
+            0
+        )  # Remove documents from the start until the token limit is met
+    return similar_docs
+
+
+def handle_errors(arg0, e):
+    error_message = f"{arg0}{e}"
+    st.error(error_message)
+    return error_message
+
+
+class TokenLimitExceededException(Exception):
+    """Exception raised when the token limit is exceeded."""
+
+    def __init__(self, message="Token limit exceeded"):
+        self.message = message
+        super().__init__(self.message)
+
+
 def get_answer(query: str) -> str:
     """Generate an answer based on similar documents and the provided query."""
-    similar_docs = get_similar_docs(index, query)
-    sources = get_sources(similar_docs)
-    queries = get_search_query(sources)
-    url_list = [parse_urls(search.run(f"{link}")) for link in queries]
-    string_to_remove = "/enterprise-server@3.6"  # No reason to look at enterprise docs, we just want to look at free version docs
-    updated_list = remove_specific_string_from_list(url_list, string_to_remove)
-    url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # found a dead link, no need to keep including it in the url list
-    clean_url_list = remove_specific_element_from_list(updated_list, url_to_remove)
-
-    time.sleep(
-        60.0 / MODEL_REQUEST_LIMIT_PER_MINUTE
-    )  # Implement a mandatory sleep time for each request before passing to LLM (this controls hitting request limits)
-
-    # Implement a 60K token rate limiter in case someone wants to throttle the system
-    reduce_tokens_if_needed(
-        prompt.format(
+    try:
+        similar_docs = get_similar_docs(index, query)
+        sources = get_sources(similar_docs)
+        queries = get_search_query(sources)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while retreiving and processing documents from Pinecones: ",
+            e,
+        )
+    try:
+        url_list = [parse_urls(search.run(f"{link}")) for link in queries]
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while fetching additional source URLs: ", e
+        )
+    try:
+        string_to_remove = "/enterprise-server@3.6"
+        updated_list = remove_specific_string_from_list(url_list, string_to_remove)
+        url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"
+        clean_url_list = remove_specific_element_from_list(updated_list, url_to_remove)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while cleaning up additional source URLs: ", e
+        )
+    try:
+        time.sleep(60.0 / MODEL_REQUEST_LIMIT_PER_MINUTE)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred during handling the API Request Rate Limit: ", e
+        )
+    try:
+        chat_history_dict = memory.load_memory_variables({})
+        formatted_prompt = prompt.format(
             human_input=query,
             context=similar_docs,
-            chat_history=memory.load_memory_variables({}),
+            chat_history=chat_history_dict["chat_history"],
             url_sources=clean_url_list,
         )
-    )
 
-    return qa_llm.run(
-        {
-            "context": similar_docs,
-            "human_input": query,
-            "chat_history": memory.load_memory_variables({}),
-            "url_sources": clean_url_list,
-        }
-    )
+        if len(enc.encode(formatted_prompt)) < 60000:
+            return qa_llm.run(
+                {
+                    "context": similar_docs,
+                    "human_input": query,
+                    "chat_history": memory.load_memory_variables({}),
+                    "url_sources": clean_url_list,
+                }
+            )
+        # Reduce chat history first
+        reduced_chat_history_dict = reduce_chat_history_tokens(chat_history_dict)
+        formatted_prompt_with_reduced_history = prompt.format(
+            human_input=query,
+            context=similar_docs,
+            chat_history=reduced_chat_history_dict["chat_history"],
+            url_sources=clean_url_list,
+        )
+
+        if len(enc.encode(formatted_prompt_with_reduced_history)) < 60000:
+            return qa_llm.run(
+                {
+                    "context": similar_docs,
+                    "human_input": query,
+                    "chat_history": reduced_chat_history_dict.get("chat_history", ""),
+                    "url_sources": clean_url_list,
+                }
+            )
+        similar_docs = reduce_similar_docs_tokens(similar_docs)
+        processed_prompt = prompt.format(
+            human_input=query,
+            context=similar_docs,
+            chat_history=reduced_chat_history_dict["chat_history"],
+            url_sources=clean_url_list,
+        )
+        # Final check on the processed prompt's token count
+        if len(enc.encode(processed_prompt)) > 60000:
+            raise TokenLimitExceededException(
+                "Final prompt still exceeds 60,000 tokens. Please reduce prompt length."
+            )
+        else:
+            return qa_llm.run(
+                {
+                    "context": similar_docs,
+                    "human_input": query,
+                    "chat_history": reduced_chat_history_dict.get("chat_history", ""),
+                    "url_sources": clean_url_list,
+                }
+            )
+    except TokenLimitExceededException as e:
+        return f"Error: {e}"
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while generating an answer with LLMChain: ", e
+        )
