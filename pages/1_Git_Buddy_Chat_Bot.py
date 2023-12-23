@@ -1,5 +1,5 @@
 import streamlit as st
-from utilities.utils import *
+from utilities.utils import get_answer
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
