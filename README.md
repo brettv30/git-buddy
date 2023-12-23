@@ -38,7 +38,7 @@ https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6b
 
 ## Additional Resources 🔍
 
-Explore [Additional Resources](https://git-buddy.streamlit.app/Additional_Resources) in the app for comprehensive details about Git Buddy's underlying documentation, architecture, and starter questions.
+Explore [Additional Resources](https://git-buddy.streamlit.app/Additional_Resources) in the app for details about the documentation Git Buddy accesses, its underlying model architecture, and helpful starter questions.
 
 ## License 📝
 
