@@ -12,7 +12,7 @@ Begin your journey with Git Buddy by visiting our [Streamlit App](https://git-bu
 
 ### Quick Demo Video 🎥
 
-Check out this [brief video](#video-link) demonstrating a chat with Git Buddy. It's a quick way to see Git Buddy in action!
+https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6bcf37824440
 
 ## Key Features 🔑
 
