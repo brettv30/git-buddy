@@ -48,4 +48,4 @@ All contributions are welcome!
 
 ## License 📝
 
-This project is under the MIT License. See [LICENSE](https://opensource.org/licenses/MIT) for more details.
+This project is under the MIT License. See [LICENSE](https://github.com/brettv30/git-buddy/blob/main/LICENSE) for more details.
