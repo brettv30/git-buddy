@@ -1,8 +1,10 @@
-# Welcome to Git Buddy 🌟
+<h1 align="center">
+Git Buddy 🤖
+</h1>
 
 Git Buddy offers streamlined assistance with Git, GitHub, and TortoiseGit, designed for users at all levels of expertise. It combines the ease of a chatbot interface with advanced Large Language Model (LLM) and Retrieval-Augmented Generation (RAG) technology to enhance your version control system experience.
 
-## About Git Buddy 🤖
+## About Git Buddy 📖
 
 Git Buddy is an advanced chatbot built using the OpenAI API (GPT-3.5-Turbo). It simplifies interactions with Git, GitHub, and TortoiseGit, offering an intuitive approach to accessing necessary information and bypassing extensive documentation.
 
@@ -39,6 +41,10 @@ https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6b
 ## Additional Resources 🔍
 
 Explore [Additional Resources](https://git-buddy.streamlit.app/Additional_Resources) in the app for details about the documentation Git Buddy accesses, its underlying model architecture, and helpful starter questions.
+
+## Contributing ✏️
+
+All contributions are welcome!
 
 ## License 📝
 
