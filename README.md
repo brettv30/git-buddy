@@ -1,6 +1,4 @@
-<h1 align="center">
-Git Buddy 🤖
-</h1>
+# Git Buddy 🤖
 
 [![Streamlit](https://img.shields.io/badge/-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![OpenAI](https://img.shields.io/badge/-OpenAI-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
