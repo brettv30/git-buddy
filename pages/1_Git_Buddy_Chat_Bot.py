@@ -1,10 +1,10 @@
 import streamlit as st
-from utils import *
+from utilities.utils import get_answer
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
 
-st.title("Git Buddy: The chatbot that answers all things Git, GitHub, and TortoiseGit")
+st.title("Git Buddy")
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -24,14 +24,11 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# If last message is not from assistant and we have a key, then respond
-if (
-    st.session_state.messages[-1]["role"]
-    != "assistant"
-    # and st.session_state.openai_api_key
-):
+# If last message is not from assistant, then respond
+if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
+            # From Utils
             chat_response = get_answer(st.session_state.messages[-1]["content"])
 
             # Write the agent's response to the chat
