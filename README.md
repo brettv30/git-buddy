@@ -2,17 +2,16 @@
 Git Buddy 🤖
 </h1>
 
-Git Buddy offers streamlined assistance with Git, GitHub, and TortoiseGit, designed for users at all levels of expertise. It combines the ease of a chatbot interface with advanced Large Language Model (LLM) and Retrieval-Augmented Generation (RAG) technology to enhance your version control system experience.
+[![Streamlit](https://img.shields.io/badge/-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![OpenAI](https://img.shields.io/badge/-OpenAI-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
+[![Pinecone](https://img.shields.io/badge/-Pinecone-0000ff?style=flat-square&logo=pinecone&logoColor=white)](https://www.pinecone.io)
+[![Langchain](https://img.shields.io/badge/-Langchain-gray?style=flat-square)](https://www.langchain.com/)
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://git-buddy.streamlit.app/)
 
 ## About Git Buddy 📖
 
-Git Buddy is an advanced chatbot built using the OpenAI API (GPT-3.5-Turbo). It simplifies interactions with Git, GitHub, and TortoiseGit, offering an intuitive approach to accessing necessary information and bypassing extensive documentation.
-
-## Getting Started 🚀
-
-Begin your journey with Git Buddy by visiting our [Streamlit App](https://git-buddy.streamlit.app) for an interactive, user-friendly experience.
-
-### Quick Demo Video 🎥
+Think of Git Buddy as a friendly, understanding, and helpful version control expert who never runs out of patience. Git Buddy offers streamlined assistance with learning about Git, GitHub, and TortoiseGit, designed for users at all levels of expertise. It combines the ease of a chatbot interface with advanced Large Language Model (LLM) and Retrieval-Augmented Generation (RAG) technology to enhance your version control system learning experience. By coupling GPT-3.5-Turbo with one-shot prompting and RAG inside a streamlit application Git Buddy is prepared to answer any and all questions related to Git, GitHub, and TortoiseGit. 
 
 https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6bcf37824440
 
@@ -20,15 +19,7 @@ https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6b
 
 - **TortoiseGit Advisor**: Helps you utilize TortoiseGit in your projects with ease.
 - **GitHub Navigator**: Guides you through GitHub, from repository management to pull requests.
-- **Learning Assistant**: Offers detailed explanations, examples, and tips on Git commands and best practices.
-
-## Tools and Technologies 🛠️
-
-- **Langchain**: Orchestrates the backend processes of Git Buddy.
-- **Pinecone**: Manages storage and retrieval of document embeddings.
-- **OpenAI's GPT-3.5-Turbo**: Powers the LLM at the core of Git Buddy.
-- **Streamlit**: Provides a sleek, user-friendly interface for Git Buddy.
-- **DuckDuckGo**: Retreives working URLs included in Git Buddy's responses.
+- **Git Teacher**: Offers detailed explanations, examples, and tips on Git commands and best practices.
 
 ## Technical Specifications 💡
 
