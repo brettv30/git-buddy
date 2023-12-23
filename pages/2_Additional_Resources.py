@@ -26,7 +26,8 @@ with tab1:
 with tab2:
     st.header("Git Buddy uses the following architecture:")
     st.image(
-        "images\High-Level-RAG-Diagram.png", caption="High Level Git-Buddy Architecture"
+        "./images/High-Level-RAG-Diagram.png",
+        caption="High Level Git-Buddy Architecture",
     )
 
 with tab3:
