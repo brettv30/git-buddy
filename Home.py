@@ -4,7 +4,6 @@ import streamlit as st
 st.set_page_config(page_title="Welcome")
 
 st.title("Welcome to Git Buddy!")
-st.subheader("The chatbot that answers all things Git, GitHub, and TortoiseGit")
 
 col1, col2, col3 = st.columns([1.25, 0.75, 3.5])
 
