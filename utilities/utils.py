@@ -175,6 +175,7 @@ def reduce_similar_docs_tokens(similar_docs, token_limit=60000):
 
 
 def handle_errors(arg0, e):
+    """Handles all incoming errors and formats the error message for streamlit output."""
     error_message = f"{arg0}{e}"
     st.error(error_message)
     return error_message

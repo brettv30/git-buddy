@@ -1,5 +1,4 @@
 from utils import (
-    get_sources,
     get_search_query,
     parse_urls,
     remove_specific_string_from_list,
