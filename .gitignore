@@ -1,4 +1,7 @@
-__pycache__
+
+# virtual environments
 gitbuddy/
+
+# testing 
 .pytest_cache/
-.devcontainer/
+test_utils_functions.py
