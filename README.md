@@ -44,7 +44,7 @@ Explore [Additional Resources](https://git-buddy.streamlit.app/Additional_Resour
 
 ## Contributing ✏️
 
-All contributions are welcome!
+All contributions are welcome! Simply open up an issue and create a pull request. If you are introducing new features, please provide a detailed description of the specific use case you are addressing and set up instructions to test.
 
 ## License 📝
 
