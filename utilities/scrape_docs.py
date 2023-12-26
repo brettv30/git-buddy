@@ -27,9 +27,30 @@ def remove_extra_whitespace(my_str):
 
 def load_docs(url, max_depth=3):
     loader = RecursiveUrlLoader(
-        url=url, max_depth=max_depth, extractor=lambda x: Soup(x, "html.parser").text
+        url=url,
+        max_depth=max_depth,
+        extractor=lambda x: Soup(x, "html.parser").text,
+        exclude_dirs=[
+            "https://docs.github.com/en/enterprise-cloud@latest",
+            "https://docs.github.com/en/enterprise-server@3.11",
+            "https://docs.github.com/en/enterprise-server@3.10",
+            "https://docs.github.com/en/enterprise-server@3.9",
+            "https://docs.github.com/en/enterprise-server@3.8",
+            "https://docs.github.com/en/enterprise-server@3.7",
+        ],
     )
     return loader.load()
+
+
+def flatten_list_of_lists(list_of_lists):
+    # This function takes a list of lists (nested list) as input.
+    # It returns a single flattened list containing all the elements
+    # from the sublists, maintaining their order.
+
+    # Using a list comprehension, iterate through each sublist in the list of lists.
+    # For each sublist, iterate through each element.
+    # The element is then added to the resulting list.
+    return [element for sublist in list_of_lists for element in sublist]
 
 
 def clean_docs(url_docs):
@@ -51,14 +72,3 @@ def split_docs(documents, chunk_size=400, chunk_overlap=50):
     )
 
     return text_splitter.split_documents(documents)
-
-
-url = "https://git-scm.com/book/en/v2"
-
-docs = load_docs(url)
-
-transformed_doc = clean_docs(docs)
-
-chunked_documents = split_docs(transformed_doc)
-
-print(chunked_documents)
