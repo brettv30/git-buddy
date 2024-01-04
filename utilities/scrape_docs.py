@@ -1,13 +1,14 @@
-from langchain.document_loaders.recursive_url_loader import RecursiveUrlLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document
-from bs4 import BeautifulSoup as Soup
 import re
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.retrievers import BM25Retriever, EnsembleRetriever
-from langchain.document_loaders import DirectoryLoader
 import streamlit as st
+from bs4 import BeautifulSoup as Soup
+from langchain.vectorstores import Chroma
+from langchain.docstore.document import Document
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.document_loaders import DirectoryLoader
+from langchain.retrievers import BM25Retriever, EnsembleRetriever
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders.recursive_url_loader import RecursiveUrlLoader
+
 
 OPENAI_API_KEY = st.secrets["SCRAPE_KEY"]
 embeddings_model = "text-embedding-ada-002"
@@ -26,14 +27,13 @@ def remove_extra_whitespace(my_str):
     # remove all useless whitespace in the string
     clean_string = (re.sub(" +", " ", (interim_string.replace("\n", " ")))).strip()
 
-    other_clean_string = clean_string.replace("'", "'")
     # Pattern to match a period followed by a capital letter
     pattern = r"\.([A-Z])"
     # Replacement pattern - a period, a space, and the matched capital letter
     replacement = r". \1"
 
     # Substitute the pattern in the text with the replacement pattern
-    return re.sub(pattern, replacement, other_clean_string)
+    return re.sub(pattern, replacement, clean_string)
 
 
 def load_docs(url, max_depth=3):
@@ -73,7 +73,9 @@ def flatten_list_of_lists(list_of_lists):
 
 def clean_docs(url_docs):
     cleaned_docs = [
-        remove_extra_whitespace(element.page_content.replace("\n", ""))
+        remove_extra_whitespace(
+            element.page_content.replace("\n", "").replace("\\'", "'")
+        )
         for element in url_docs
     ]
     metadata = [document.metadata for document in url_docs]
@@ -94,7 +96,7 @@ def split_docs(documents, chunk_size=400, chunk_overlap=50):
 
 # List of URLs we want to iterate through and add to documentation
 url_list = [
-    # "https://docs.github.com/en/get-started",
+    "https://docs.github.com/en/get-started",
     "https://docs.github.com/en/authentication",
     # "https://docs.github.com/en/repositories",
     # "https://docs.github.com/en/pull-requests",
@@ -105,7 +107,7 @@ url_list = [
     # "https://docs.github.com/en/code-security",
     # "https://docs.github.com/en/issues",
     # "https://docs.github.com/en/search-github",
-    # "https://git-scm.com/book/en/v2",
+    "https://git-scm.com/book/en/v2",
 ]
 
 docs = [load_docs(url) for url in url_list]
@@ -121,7 +123,7 @@ transformed_doc = clean_docs(full_list)
 chunked_documents = split_docs(transformed_doc)
 
 # initialize the bm25 retriever and chroma retriever
-bm25_retriever = BM25Retriever.from_texts(chunked_documents)
+bm25_retriever = BM25Retriever.from_documents(chunked_documents)
 bm25_retriever.k = 5
 
 chroma_retriever = Chroma.from_documents(
