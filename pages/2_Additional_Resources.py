@@ -7,11 +7,10 @@ st.title("Additional Resources")
 tab1, tab2, tab3 = st.tabs(["Documentation", "Model Architecture", "Starter Questions"])
 
 with tab1:
-    st.subheader(
-        "Git Buddy's Pinecone vector database was populated with information from the following documentation:"
-    )
     st.markdown(
         """
+        **The following documents populated Git Buddy's vector database:**
+
         [Pro Git](https://git-scm.com/book/en/v2) by Scott Chacon and Ben Straub
 
         [GitHub Docs](https://docs.github.com/en) The Official GitHub Documentation
@@ -24,14 +23,14 @@ with tab1:
 
 
 with tab2:
-    st.subheader("Git Buddy uses the following architecture:")
+    st.markdown("**Git Buddy uses the following architecture:**")
     st.image(
         "./images/High-Level-RAG-Diagram.png",
         caption="High Level Git-Buddy Architecture",
     )
 
 with tab3:
-    st.subheader("Git, GitHub, and TortoiseGit Starter Questions:")
+    st.markdown("**Git, GitHub, and TortoiseGit Starter Questions:**")
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(
