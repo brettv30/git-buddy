@@ -25,13 +25,15 @@ def remove_extra_whitespace(my_str):
 
     # remove all useless whitespace in the string
     clean_string = (re.sub(" +", " ", (interim_string.replace("\n", " ")))).strip()
+
+    other_clean_string = clean_string.replace("'", "'")
     # Pattern to match a period followed by a capital letter
     pattern = r"\.([A-Z])"
     # Replacement pattern - a period, a space, and the matched capital letter
     replacement = r". \1"
 
     # Substitute the pattern in the text with the replacement pattern
-    return re.sub(pattern, replacement, clean_string)
+    return re.sub(pattern, replacement, other_clean_string)
 
 
 def load_docs(url, max_depth=3):
