@@ -9,7 +9,7 @@ tab1, tab2, tab3 = st.tabs(["Documentation", "Model Architecture", "Starter Ques
 with tab1:
     st.markdown(
         """
-        ### **The following documents populated Git Buddy's vector database:**
+        **The following documents populated Git Buddy's vector database:**
 
         [Pro Git](https://git-scm.com/book/en/v2) by Scott Chacon and Ben Straub
 
