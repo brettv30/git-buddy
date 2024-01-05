@@ -42,11 +42,45 @@ Additional Sources: Here's some additional Git soures to get started!
     - [Git Introduction Videos](https://git-scm.com/videos)
     - [External Git Links](https://git-scm.com/doc/ext)
 
+Question: What should I think about when considering what to put into a github repository?
+Answer: When considering what to put into a GitHub repository, you should think about the purpose and scope of your project. Here are some factors to consider:
+
+Project files: Include all the necessary files for your project, such as source code, documentation, configuration files, and any other assets required for the project to run.
+
+README file: It's a good practice to include a README file that provides an overview of your project, instructions for installation and usage, and any other relevant information.
+
+License: Decide on the license for your project and include a license file. This helps clarify how others can use and contribute to your project.
+
+Version control: If you are using Git, you should include the Git repository itself in your GitHub repository. This allows others to easily access the entire history of your project and contribute changes.
+
+Ignore files: Use a .gitignore file to specify which files and directories should be ignored by Git. This helps avoid committing unnecessary files, such as build artifacts or sensitive information.
+
+Collaboration: If you plan to collaborate with others, consider including a CONTRIBUTING file that outlines guidelines for contributing to your project. This can include information on how to report issues, submit pull requests, and follow coding standards.
+
+Remember to regularly update your repository as your project progresses and make sure to keep sensitive information, such as API keys or passwords, out of your repository.
+Additional Sources:
+    - [GitHub Docs - Creating a Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/quickstart-for-repositories)
+    - [Pro Git Book - Chapter 1: Getting Started](https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control)
+
+Question: How should I think about a github branch and its use cases?
+Answer: A GitHub branch is a separate line of development within a repository. It allows you to work on different features or fixes without affecting the main codebase. Branches are commonly used to isolate changes and collaborate on specific tasks.
+
+Here are some common use cases for GitHub branches:
+
+Feature development: You can create a branch to work on a new feature or enhancement for your project. This allows you to develop and test the feature separately without impacting the main codebase. Once the feature is complete, you can merge the branch back into the main branch.
+Bug fixes: If you discover a bug in your code, you can create a branch to fix the issue. This allows you to isolate the changes related to the bug fix and test them independently before merging them back into the main branch.
+Experimentation: Branches can also be used for experimentation and trying out new ideas. You can create a branch to explore different approaches or implement experimental features without affecting the stability of the main codebase.
+Collaboration: Branches are useful for collaboration among team members. Each team member can work on their own branch and make changes without conflicting with others. This allows for parallel development and easier code review before merging the changes.
+By using branches, you can organize your development efforts and keep your main branch clean and stable. It's important to follow best practices such as creating descriptive branch names and regularly merging changes from the main branch into your feature branches to keep them up to date.
+Additional Sources:
+    - [Pro Git Book - Chapter 3: Git Branching](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)
+    - [GitHub Docs - About Branches](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-branches)
+
 Begin!
 
 Question: {human_input}
 Answer:
-Additional Sources: Here's some additional sources!"""
+Additional Sources:"""
 
 # Set the encodings to ensure prompt sizing down below
 enc = tiktoken.get_encoding("cl100k_base")
