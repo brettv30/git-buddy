@@ -2,16 +2,16 @@
 import time
 import pinecone
 import streamlit as st
-from utils import load_docs, load_pdfs, flatten_list_of_lists, clean_docs, split_docs
 from langchain.vectorstores import Pinecone
 from langchain.embeddings.openai import OpenAIEmbeddings
+from utils import load_docs, load_pdfs, flatten_list_of_lists, clean_docs, split_docs
 
-openai_api_key_env = st.secrets["OPENAI_API_KEY"]
-pinecone_api_key_env = st.secrets["PINECONE_API_KEY"]
 directory = "data"
 index_name = "git-buddy-index"
 embeddings_model = "text-embedding-ada-002"
-llm_model = "gpt-3.5-turbo"
+
+openai_api_key_env = st.secrets["OPENAI_API_KEY"]
+pinecone_api_key_env = st.secrets["PINECONE_API_KEY"]
 
 # List of URLs we want to iterate through and add to documentation
 url_list = [
