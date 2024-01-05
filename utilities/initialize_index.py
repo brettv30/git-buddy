@@ -61,3 +61,5 @@ embeddings = OpenAIEmbeddings(model=embeddings_model)
 
 # This actually loads the data/embeddings into your index
 index = Pinecone.from_documents(chunked_documents, embeddings, index_name=index_name)
+
+print("Index Creation Complete!")
