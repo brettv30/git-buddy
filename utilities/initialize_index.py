@@ -2,10 +2,9 @@
 import time
 import pinecone
 import streamlit as st
+from utils import load_docs, load_pdfs, flatten_list_of_lists, clean_docs, split_docs
 from langchain.vectorstores import Pinecone
-from langchain.document_loaders import DirectoryLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 openai_api_key_env = st.secrets["OPENAI_API_KEY"]
 pinecone_api_key_env = st.secrets["PINECONE_API_KEY"]
@@ -14,22 +13,23 @@ index_name = "git-buddy-index"
 embeddings_model = "text-embedding-ada-002"
 llm_model = "gpt-3.5-turbo"
 
+# List of URLs we want to iterate through and add to documentation
+url_list = [
+    "https://docs.github.com/en",
+    "https://git-scm.com/book/en/v2",
+]
 
-def load_docs(directory):
-    loader = DirectoryLoader(directory)
-    return loader.load()
+docs = [load_docs(url) for url in url_list]
 
+pdfs = load_pdfs(directory)
 
-def split_docs(documents, chunk_size=400, chunk_overlap=50):
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap
-    )
-    return text_splitter.split_documents(documents)
+flattened_list = flatten_list_of_lists(docs)
 
+full_list = flattened_list + pdfs
 
-documents = load_docs(directory)
-docs = split_docs(documents)
+transformed_doc = clean_docs(full_list)
 
+chunked_documents = split_docs(transformed_doc)
 
 # Initialize the Pinecone Vector Database
 pinecone.init(environment="gcp-starter")  # next to api key in console
@@ -56,4 +56,4 @@ embeddings = OpenAIEmbeddings(model=embeddings_model)
 # index = Pinecone.from_existing_index(index_name, embeddings)
 
 # This actually loads the data/embeddings into your index
-index = Pinecone.from_documents(docs, embeddings, index_name=index_name)
+index = Pinecone.from_documents(chunked_documents, embeddings, index_name=index_name)

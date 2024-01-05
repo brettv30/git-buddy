@@ -4,16 +4,21 @@ import tiktoken
 import pinecone
 import streamlit as st
 from langchain.chains import LLMChain
+from bs4 import BeautifulSoup as Soup
 from langchain.vectorstores import Pinecone
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
+from langchain.docstore.document import Document
 from langchain.tools import DuckDuckGoSearchResults
+from langchain.document_loaders import DirectoryLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain.retrievers import ContextualCompressionRetriever
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.retrievers.document_compressors import LLMChainExtractor
-from langchain.retrievers.document_compressors import DocumentCompressorPipeline
+from langchain.document_loaders.recursive_url_loader import RecursiveUrlLoader
+from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain_community.document_transformers import EmbeddingsRedundantFilter
+from langchain.retrievers.document_compressors import DocumentCompressorPipeline
 
 # Set environment variables
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -25,7 +30,7 @@ EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
 RETRIEVED_DOCUMENTS = (
-    5  # This one can vary while we test out different retrieval methods
+    10  # This one can vary while we test out different retrieval methods
 )
 PROMPT_TEMPLATE = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
@@ -91,6 +96,84 @@ Additional Sources:"""
 
 # Set the encodings to ensure prompt sizing down below
 enc = tiktoken.get_encoding("cl100k_base")
+
+
+# Create functions used to scrape & extract data
+def remove_extra_whitespace(my_str):
+    # Remove useless page content from GitHub docs
+    string_to_remove1 = "This book is available in  English.   Full translation available in  azərbaycan dili,български език,Deutsch,Español,Français,Ελληνικά,日本語,한국어,Nederlands,Русский,Slovenščina,Tagalog,Українська简体中文,   Partial translations available in  Čeština,Македонски,Polski,Српски,Ўзбекча,繁體中文,   Translations started for  Беларуская,فارسی,Indonesian,Italiano,Bahasa Melayu,Português (Brasil),Português (Portugal),Svenska,Türkçe. The source of this book is hosted on GitHub.Patches, suggestions and comments are welcome."
+    string_to_remove2 = "Help and supportDid this doc help you?YesNoPrivacy policyHelp us make these docs great!All GitHub docs are open source. See something that's wrong or unclear? Submit a pull request.Make a contributionLearn how to contributeStill need help?Ask the GitHub communityContact supportLegal© 2023 GitHub, Inc.TermsPrivacyStatusPricingExpert servicesBlog"
+
+    interim_string = my_str.replace(string_to_remove1, "").replace(
+        string_to_remove2, ""
+    )
+
+    # remove all useless whitespace in the string
+    clean_string = (re.sub(" +", " ", (interim_string.replace("\n", " ")))).strip()
+
+    # Pattern to match a period followed by a capital letter
+    pattern = r"\.([A-Z])"
+    # Replacement pattern - a period, a space, and the matched capital letter
+    replacement = r". \1"
+
+    # Substitute the pattern in the text with the replacement pattern
+    return re.sub(pattern, replacement, clean_string)
+
+
+def load_docs(url, max_depth=3):
+    loader = RecursiveUrlLoader(
+        url=url,
+        max_depth=max_depth,
+        extractor=lambda x: " ".join(
+            [p.get_text() for p in Soup(x, "html.parser").find_all("p")]
+        ),
+        exclude_dirs=[
+            "https://docs.github.com/en/enterprise-cloud@latest",
+            "https://docs.github.com/en/enterprise-server@3.11",
+            "https://docs.github.com/en/enterprise-server@3.10",
+            "https://docs.github.com/en/enterprise-server@3.9",
+            "https://docs.github.com/en/enterprise-server@3.8",
+            "https://docs.github.com/en/enterprise-server@3.7",
+        ],
+    )
+    return loader.load()
+
+
+def load_pdfs(directory):
+    loader = DirectoryLoader(directory)
+    return loader.load()
+
+
+def flatten_list_of_lists(list_of_lists):
+    # This function takes a list of lists (nested list) as input.
+    # It returns a single flattened list containing all the elements
+    # from the sublists, maintaining their order.
+
+    # Using a list comprehension, iterate through each sublist in the list of lists.
+    # For each sublist, iterate through each element.
+    # The element is then added to the resulting list.
+    return [element for sublist in list_of_lists for element in sublist]
+
+
+def clean_docs(url_docs):
+    cleaned_docs = [
+        remove_extra_whitespace(element.page_content.replace("\n", ""))
+        for element in url_docs
+    ]
+    metadata = [document.metadata for document in url_docs]
+
+    return [
+        Document(page_content=cleaned_docs[i], metadata=metadata[i])
+        for i in range(len(url_docs))
+    ]
+
+
+def split_docs(documents, chunk_size=400, chunk_overlap=50):
+    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    )
+
+    return text_splitter.split_documents(documents)
 
 
 # Initialize Pinecone and LangChain components
