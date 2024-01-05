@@ -19,16 +19,20 @@ url_list = [
     "https://git-scm.com/book/en/v2",
 ]
 
+# Load in knowledge base
 docs = [load_docs(url) for url in url_list]
 
 pdfs = load_pdfs(directory)
 
+# Flatten the list of lists into just a single list
 flattened_list = flatten_list_of_lists(docs)
 
 full_list = flattened_list + pdfs
 
+# Clean the documents/pdfs
 transformed_doc = clean_docs(full_list)
 
+# Create docs to pass to langchain
 chunked_documents = split_docs(transformed_doc)
 
 # Initialize the Pinecone Vector Database
@@ -53,7 +57,7 @@ pinecone.init(environment="gcp-starter")  # next to api key in console
 
 # if you already have an index, you can load it like this
 embeddings = OpenAIEmbeddings(model=embeddings_model)
-# index = Pinecone.from_existing_index(index_name, embeddings)
+
 
 # This actually loads the data/embeddings into your index
 index = Pinecone.from_documents(chunked_documents, embeddings, index_name=index_name)
