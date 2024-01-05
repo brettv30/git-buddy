@@ -109,22 +109,3 @@ full_list = flattened_list + pdfs
 transformed_doc = clean_docs(full_list)
 
 chunked_documents = split_docs(transformed_doc)
-
-# initialize the bm25 retriever and chroma retriever
-bm25_retriever = BM25Retriever.from_documents(chunked_documents)
-bm25_retriever.k = 5
-
-chroma_retriever = Chroma.from_documents(
-    chunked_documents, OpenAIEmbeddings(model=embeddings_model)
-).as_retriever(search_kwargs={"k": 5})
-
-# initialize the ensemble retriever
-ensemble_retriever = EnsembleRetriever(
-    retrievers=[bm25_retriever, chroma_retriever], weights=[0.5, 0.5]
-)
-
-results = ensemble_retriever.get_relevant_documents(
-    "What is the difference between Git and GitHub?"
-)
-
-print(results)
