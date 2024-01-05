@@ -17,7 +17,7 @@ directory = "data"
 
 def remove_extra_whitespace(my_str):
     # Remove useless page content from GitHub docs
-    string_to_remove1 = "\nThis book is available in\n  English.\n \n  Full translation available in\n  \nazərbaycan dili,\nбългарски език,\nDeutsch,\nEspañol,\nFrançais,\nΕλληνικά,\n日本語,\n한국어,\nNederlands,\nРусский,\nSlovenščina,\nTagalog,\nУкраїнська\n简体中文,\n\n \n  Partial translations available in\n  \nČeština,\nМакедонски,\nPolski,\nСрпски,\nЎзбекча,\n繁體中文,\n\n \n  Translations started for\n  \nБеларуская,\nفارسی,\nIndonesian,\nItaliano,\nBahasa Melayu,\nPortuguês (Brasil),\nPortuguês (Portugal),\nSvenska,\nTürkçe.\n\n \nThe source of this book is hosted on GitHub.\nPatches, suggestions and comments are welcome.\n"
+    string_to_remove1 = "This book is available in  English.   Full translation available in  azərbaycan dili,български език,Deutsch,Español,Français,Ελληνικά,日本語,한국어,Nederlands,Русский,Slovenščina,Tagalog,Українська简体中文,   Partial translations available in  Čeština,Македонски,Polski,Српски,Ўзбекча,繁體中文,   Translations started for  Беларуская,فارسی,Indonesian,Italiano,Bahasa Melayu,Português (Brasil),Português (Portugal),Svenska,Türkçe. The source of this book is hosted on GitHub.Patches, suggestions and comments are welcome."
     string_to_remove2 = "Help and supportDid this doc help you?YesNoPrivacy policyHelp us make these docs great!All GitHub docs are open source. See something that's wrong or unclear? Submit a pull request.Make a contributionLearn how to contributeStill need help?Ask the GitHub communityContact supportLegal© 2023 GitHub, Inc.TermsPrivacyStatusPricingExpert servicesBlog"
 
     interim_string = my_str.replace(string_to_remove1, "").replace(
@@ -73,9 +73,7 @@ def flatten_list_of_lists(list_of_lists):
 
 def clean_docs(url_docs):
     cleaned_docs = [
-        remove_extra_whitespace(
-            element.page_content.replace("\n", "").replace("\\'", "'")
-        )
+        remove_extra_whitespace(element.page_content.replace("\n", ""))
         for element in url_docs
     ]
     metadata = [document.metadata for document in url_docs]
@@ -96,17 +94,7 @@ def split_docs(documents, chunk_size=400, chunk_overlap=50):
 
 # List of URLs we want to iterate through and add to documentation
 url_list = [
-    "https://docs.github.com/en/get-started",
-    "https://docs.github.com/en/authentication",
-    # "https://docs.github.com/en/repositories",
-    # "https://docs.github.com/en/pull-requests",
-    # "https://docs.github.com/en/copilot",
-    # "https://docs.github.com/en/actions",
-    # "https://docs.github.com/en/pages",
-    # "https://docs.github.com/en/migrations"
-    # "https://docs.github.com/en/code-security",
-    # "https://docs.github.com/en/issues",
-    # "https://docs.github.com/en/search-github",
+    "https://docs.github.com/en",
     "https://git-scm.com/book/en/v2",
 ]
 
