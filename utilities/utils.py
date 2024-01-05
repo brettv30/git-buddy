@@ -24,6 +24,9 @@ MODEL_REQUEST_LIMIT_PER_MINUTE = 500
 EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
+RETRIEVED_DOCUMENTS = (
+    5  # This one can vary while we test out different retrieval methods
+)
 PROMPT_TEMPLATE = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
 If possible, please provide example code to help the beginner learn Git commands. Never use the sources from the context in an answer, only use the sources from url_sources.
@@ -96,7 +99,9 @@ def initialize_components():
     pinecone.init(api_key=PINECONE_API_KEY, environment="gcp-starter")
     embeddings = OpenAIEmbeddings(model=EMBEDDINGS_MODEL)
     index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
-    retriever = index.as_retriever(search_type="mmr", search_kwargs={"k": 5})
+    retriever = index.as_retriever(
+        search_type="mmr", search_kwargs={"k": RETRIEVED_DOCUMENTS}
+    )
     llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0.5)
     memory = ConversationBufferWindowMemory(
         memory_key="chat_history",
@@ -147,7 +152,9 @@ def initialize_components():
 ) = initialize_components()
 
 
-def get_similar_docs(index, query: str, k: int = 5, score: bool = False) -> list:
+def get_similar_docs(
+    index, query: str, k: int = RETRIEVED_DOCUMENTS, score: bool = False
+) -> list:
     """Retrieve similar documents from the index based on the given query."""
     return (
         index.similarity_search_with_score(query, k=k)
