@@ -10,6 +10,10 @@ from langchain.prompts import PromptTemplate
 from langchain.tools import DuckDuckGoSearchResults
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import LLMChainExtractor
+from langchain.retrievers.document_compressors import DocumentCompressorPipeline
+from langchain_community.document_transformers import EmbeddingsRedundantFilter
 
 # Set environment variables
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -92,6 +96,7 @@ def initialize_components():
     pinecone.init(api_key=PINECONE_API_KEY, environment="gcp-starter")
     embeddings = OpenAIEmbeddings(model=EMBEDDINGS_MODEL)
     index = Pinecone.from_existing_index(INDEX_NAME, embeddings)
+    retriever = index.as_retriever(search_type="mmr", search_kwargs={"k": 5})
     llm = ChatOpenAI(model_name=MODEL_NAME, temperature=0.5)
     memory = ConversationBufferWindowMemory(
         memory_key="chat_history",
@@ -104,20 +109,69 @@ def initialize_components():
     )
     qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
     search = DuckDuckGoSearchResults()
-    return prompt, index, qa_llm, search, memory
+
+    relevant_filter = LLMChainExtractor.from_llm(llm)
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=relevant_filter, base_retriever=retriever
+    )
+
+    redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
+    pipeline_compressor = DocumentCompressorPipeline(
+        transformers=[redundant_filter, relevant_filter]
+    )
+
+    pipeline_compression_retriever = ContextualCompressionRetriever(
+        base_compressor=pipeline_compressor, base_retriever=retriever
+    )
+
+    return (
+        prompt,
+        index,
+        qa_llm,
+        search,
+        memory,
+        compression_retriever,
+        pipeline_compression_retriever,
+    )
 
 
 # Initialize chatbot components
-prompt, index, qa_llm, search, memory = initialize_components()
+(
+    prompt,
+    index,
+    qa_llm,
+    search,
+    memory,
+    retriever,
+    pipe_retriever,
+) = initialize_components()
 
 
-def get_similar_docs(index, query: str, k: int = 3, score: bool = False) -> list:
+def get_similar_docs(index, query: str, k: int = 5, score: bool = False) -> list:
     """Retrieve similar documents from the index based on the given query."""
     return (
         index.similarity_search_with_score(query, k=k)
         if score
         else index.similarity_search(query, k=k)
     )
+
+
+def get_relevant_docs(retriever, query):
+    """Retrieve relevant documents from the index using the Contextual Compression Retriever"""
+    return retriever.get_relevant_documents(query)
+
+
+def pipe_get_relevant_docs(retriever, query):
+    """Retrieve relevant documents from the index using the Pipeline Contextual Compression Retriever"""
+    return retriever.get_relevant_documents(query)
+
+
+print("-------------------- Similar Docs with Similarity Search")
+print(get_similar_docs(index, "What is branching in Git?"))
+print("-------------------- Relevant Docs with Contextual Compression")
+print(get_relevant_docs(retriever, "What is branching in Git?"))
+print("-------------------- Relevant Docs with Pipeline Contextual Compression")
+print(pipe_get_relevant_docs(pipe_retriever, "What is branching in Git?"))
 
 
 def get_sources(docs: str) -> list:
