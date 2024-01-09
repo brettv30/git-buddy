@@ -1,5 +1,5 @@
 import streamlit as st
-from utilities.utils import get_answer
+from utilities.utils import get_improved_answer
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -29,7 +29,9 @@ if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             # From Utils
-            chat_response = get_answer(st.session_state.messages[-1]["content"])
+            chat_response = get_improved_answer(
+                st.session_state.messages[-1]["content"]
+            )
 
             # Write the agent's response to the chat
             st.write(chat_response)

@@ -2,6 +2,7 @@ import re
 import time
 import tiktoken
 import pinecone
+import warnings
 import streamlit as st
 from langchain.chains import LLMChain
 from bs4 import BeautifulSoup as Soup
@@ -20,17 +21,21 @@ from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain_community.document_transformers import EmbeddingsRedundantFilter
 from langchain.retrievers.document_compressors import DocumentCompressorPipeline
 
+# Settings the warnings to be ignored
+warnings.filterwarnings("ignore")
+
 # Set environment variables
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
 
 # Set Const Variables
 MODEL_REQUEST_LIMIT_PER_MINUTE = 500
+MODEL_TOKEN_LIMIT_PER_QUERY = 4097
 EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
 RETRIEVED_DOCUMENTS = (
-    10  # This one can vary while we test out different retrieval methods
+    8  # This one can vary while we test out different retrieval methods
 )
 PROMPT_TEMPLATE = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
@@ -120,7 +125,7 @@ def remove_extra_whitespace(my_str):
     return re.sub(pattern, replacement, clean_string)
 
 
-def load_docs(url, max_depth=3):
+def load_docs(url, max_depth=6):
     loader = RecursiveUrlLoader(
         url=url,
         max_depth=max_depth,
@@ -205,7 +210,7 @@ def initialize_components():
 
     redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
     pipeline_compressor = DocumentCompressorPipeline(
-        transformers=[redundant_filter, relevant_filter]
+        transformers=[relevant_filter, redundant_filter]
     )
 
     pipeline_compression_retriever = ContextualCompressionRetriever(
@@ -256,14 +261,6 @@ def pipe_get_relevant_docs(retriever, query):
     return retriever.get_relevant_documents(query)
 
 
-print("-------------------- Similar Docs with Similarity Search")
-print(get_similar_docs(index, "What is branching in Git?"))
-print("-------------------- Relevant Docs with Contextual Compression")
-print(get_relevant_docs(retriever, "What is branching in Git?"))
-print("-------------------- Relevant Docs with Pipeline Contextual Compression")
-print(pipe_get_relevant_docs(pipe_retriever, "What is branching in Git?"))
-
-
 def get_sources(docs: str) -> list:
     """Extract the 'source' from each document's metadata."""
     return [doc.metadata["source"] for doc in docs]
@@ -271,10 +268,23 @@ def get_sources(docs: str) -> list:
 
 def get_search_query(sources: list) -> list:
     """Generate search queries from the list of sources."""
-    pattern = r"\\(.*?)\."
-    searches = [re.findall(pattern, source) for source in sources]
-    # Flatten list and remove duplicates
-    return list({element for sublist in searches for element in sublist})
+    search_list = []
+    for source in sources:
+        if source == "data\\TortoiseGit-Manual.pdf":
+            sources.remove(source)
+            if source not in search_list:
+                search_list.append("TortoiseGit-Manual")
+        elif source == "data\\TortoiseGitMerge-Manual.pdf":
+            sources.remove(source)
+            if source not in search_list:
+                search_list.append("TortoiseGitMerge-Manual")
+
+    url_list = [parse_urls(search.run(f"{link}")) for link in search_list]
+
+    for url in url_list:
+        sources.extend(url)
+
+    return sources
 
 
 def parse_urls(search_results: str) -> list:
@@ -297,9 +307,7 @@ def remove_specific_string_from_list(nested_list: list, string_to_remove: str) -
     ]
 
 
-def remove_specific_element_from_list(
-    nested_list: list, element_to_remove: str
-) -> list:
+def remove_specific_element_from_list(url_list: list, element_to_remove: str) -> list:
     """
     Removes a specific element from all sublists of a nested list.
 
@@ -307,37 +315,40 @@ def remove_specific_element_from_list(
     :param element_to_remove: Element to be removed from the lists.
     :return: A new nested list with the specific element removed.
     """
-    return [
-        [element for element in sublist if element != element_to_remove]
-        for sublist in nested_list
-    ]
+    return [element for element in url_list if element != element_to_remove]
 
 
-def reduce_chat_history_tokens(chat_history_dict, token_limit=40000):
-    """
-    Reduces the chat history in the dictionary by two human/AI interactions if the token count exceeds the token_limit.
-
-    :param chat_history_dict: Dictionary containing chat history under the 'chat_history' key.
-    :param token_limit: The target token limit for the chat history.
-    :return: Dictionary with reduced chat history.
-    """
+def reduce_chat_history_tokens(chat_history_dict):
+    """Extract and return Human-AI combos from the text, dropping the first two interactions."""
     chat_history = chat_history_dict.get("chat_history", "")
-    tokens = enc.encode(chat_history)
-    if len(tokens) > token_limit:
-        interactions = chat_history.split(
-            "Human:"
-        )  # Assuming each interaction is separated by a newline
-        if (
-            len(interactions) > 4
-        ):  # Check if there are at least two interactions to remove
-            reduced_history = "\n".join(
-                interactions[-4:]
-            )  # Keep the last four interactions (two human/AI cycles)
-            chat_history_dict["chat_history"] = reduced_history
-    return chat_history_dict
+
+    print("chat history", chat_history)
+
+    pattern = r"(Human:.*?)(?=Human:|$)|(AI:.*?)(?=AI:|$)"
+    matches = re.findall(pattern, chat_history, re.DOTALL)
+
+    print("Matches:", matches)
+
+    # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
+    combos = ["".join(match) for match in matches]
+
+    print("Combos:", combos)
+    while len(combos) > 2:
+        combos.pop(0)
+
+    print("New Combos Length at least 2:", combos)
+
+    return {"chat_history": "\n".join(combos)}
 
 
-def reduce_similar_docs_tokens(similar_docs, token_limit=60000):
+def reduce_doc_tokens(
+    docs,
+    incoming_prompt,
+    user_query,
+    reduced_chat_history,
+    url_list,
+    token_limit=MODEL_TOKEN_LIMIT_PER_QUERY,
+):
     """
     Reduces the number of documents in similar_docs to ensure the total token count is below the token_limit.
 
@@ -345,18 +356,24 @@ def reduce_similar_docs_tokens(similar_docs, token_limit=60000):
     :param token_limit: The target token limit for the entire prompt.
     :return: Reduced list of similar documents.
     """
-    while len(similar_docs) > 1 and len(enc.encode(str(similar_docs))) > token_limit:
-        similar_docs.pop(
-            0
-        )  # Remove documents from the start until the token limit is met
-    return similar_docs
+    print("Original Docs", docs)
+    while len(docs) > 1 and len(enc.encode(str(incoming_prompt))) > token_limit:
+        print("Removing the following from docs", docs[0])
+        docs.pop(0)  # Remove documents from the start until the token limit is met
+        incoming_prompt = prompt.format(
+            human_input=user_query,
+            context=docs,
+            chat_history=reduced_chat_history["chat_history"],
+            url_sources=url_list,
+        )
+    print("Updated docs", docs)
+    return docs
 
 
 def handle_errors(arg0, e):
     """Handles all incoming errors and formats the error message for streamlit output."""
     error_message = f"{arg0}{e}"
-    st.error(error_message)
-    return error_message
+    return st.error(error_message)
 
 
 class TokenLimitExceededException(Exception):
@@ -435,7 +452,7 @@ def get_answer(query: str) -> str:
                     "url_sources": clean_url_list,
                 }
             )
-        similar_docs = reduce_similar_docs_tokens(similar_docs)
+        similar_docs = reduce_docs_tokens(similar_docs)
         processed_prompt = prompt.format(
             human_input=query,
             context=similar_docs,
@@ -462,3 +479,117 @@ def get_answer(query: str) -> str:
         return handle_errors(
             "Error occurred while generating an answer with LLMChain: ", e
         )
+
+
+def get_improved_answer(query):
+    try:
+        relevant_docs = get_relevant_docs(retriever, query)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred in Contextual Compression Pipeline. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
+            e,
+        )
+    try:
+        sources = get_sources(relevant_docs)
+        links = get_search_query(sources)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while retrieving document sources. Please try query again. Additional Error Information: ",
+            e,
+        )
+    try:
+        url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"
+        clean_url_list = remove_specific_element_from_list(links, url_to_remove)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while cleaning up source URLs. Please try query again. Additional Error Information: ",
+            e,
+        )
+
+    time.sleep(60.0 / MODEL_REQUEST_LIMIT_PER_MINUTE)
+
+    try:
+        return verify_api_limits(query, relevant_docs, clean_url_list)
+    except Exception as e:
+        return handle_errors(
+            "Error occurred while generating an answer with LLMChain: ", e
+        )
+
+
+def verify_api_limits(query, relevant_docs, clean_url_list):
+    chat_history_dict = memory.load_memory_variables({})
+    formatted_prompt = prompt.format(
+        human_input=query,
+        context=relevant_docs,
+        chat_history=chat_history_dict["chat_history"],
+        url_sources=clean_url_list,
+    )
+
+    if len(enc.encode(formatted_prompt)) < MODEL_TOKEN_LIMIT_PER_QUERY:
+        print(
+            "Length of formatted prompt is less than 4097 tokens. passing prompt to openAI"
+        )
+        return qa_llm.run(
+            {
+                "context": relevant_docs,
+                "human_input": query,
+                "chat_history": memory.load_memory_variables({}),
+                "url_sources": clean_url_list,
+            }
+        )
+    # Reduce chat history first
+    print("Length of formatted prompt exceeded 4097 limit. Reducing Chat History.")
+    reduced_chat_history_dict = reduce_chat_history_tokens(chat_history_dict)
+    formatted_prompt_with_reduced_history = prompt.format(
+        human_input=query,
+        context=relevant_docs,
+        chat_history=reduced_chat_history_dict["chat_history"],
+        url_sources=clean_url_list,
+    )
+
+    if (
+        len(enc.encode(formatted_prompt_with_reduced_history))
+        < MODEL_TOKEN_LIMIT_PER_QUERY
+    ):
+        print(
+            "Length of prompt with reduced chat history is less than 4097 tokens. passing prompt to openAI"
+        )
+        return qa_llm.run(
+            {
+                "context": relevant_docs,
+                "human_input": query,
+                "chat_history": reduced_chat_history_dict["chat_history"],
+                "url_sources": clean_url_list,
+            }
+        )
+    print(
+        "Length of prompt with reduced chat history exceeded 4097 tokens. Reducing relevant documents retrieved."
+    )
+    shorter_relevant_docs = reduce_doc_tokens(
+        relevant_docs,
+        formatted_prompt_with_reduced_history,
+        query,
+        reduced_chat_history_dict,
+        clean_url_list,
+    )
+    processed_prompt = prompt.format(
+        human_input=query,
+        context=shorter_relevant_docs,
+        chat_history=reduced_chat_history_dict["chat_history"],
+        url_sources=clean_url_list,
+    )
+    if len(enc.encode(processed_prompt)) > MODEL_TOKEN_LIMIT_PER_QUERY:
+        raise TokenLimitExceededException(
+            "Final prompt still exceeds 4097 tokens. Please reduce prompt length."
+        )
+    print(
+        "Length of prompt with reduced chat history and less documents is less than 4097 tokens. passing prompt to openAI."
+    )
+    return qa_llm.run(
+        {
+            "context": relevant_docs,
+            "human_input": query,
+            "chat_history": reduced_chat_history_dict.get("chat_history", ""),
+            "url_sources": clean_url_list,
+        }
+    )
