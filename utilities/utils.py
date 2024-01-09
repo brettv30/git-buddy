@@ -589,7 +589,7 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
         {
             "context": relevant_docs,
             "human_input": query,
-            "chat_history": reduced_chat_history_dict.get("chat_history", ""),
+            "chat_history": reduced_chat_history_dict["chat_history"],
             "url_sources": clean_url_list,
         }
     )
