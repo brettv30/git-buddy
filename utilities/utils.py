@@ -322,21 +322,14 @@ def reduce_chat_history_tokens(chat_history_dict):
     """Extract and return Human-AI combos from the text, dropping the first two interactions."""
     chat_history = chat_history_dict.get("chat_history", "")
 
-    print("chat history", chat_history)
-
     pattern = r"(Human:.*?)(?=Human:|$)|(AI:.*?)(?=AI:|$)"
     matches = re.findall(pattern, chat_history, re.DOTALL)
-
-    print("Matches:", matches)
 
     # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
     combos = ["".join(match) for match in matches]
 
-    print("Combos:", combos)
     while len(combos) > 2:
         combos.pop(0)
-
-    print("New Combos Length at least 2:", combos)
 
     return {"chat_history": "\n".join(combos)}
 
@@ -356,9 +349,7 @@ def reduce_doc_tokens(
     :param token_limit: The target token limit for the entire prompt.
     :return: Reduced list of similar documents.
     """
-    print("Original Docs", docs)
     while len(docs) > 1 and len(enc.encode(str(incoming_prompt))) > token_limit:
-        print("Removing the following from docs", docs[0])
         docs.pop(0)  # Remove documents from the start until the token limit is met
         incoming_prompt = prompt.format(
             human_input=user_query,
@@ -366,14 +357,12 @@ def reduce_doc_tokens(
             chat_history=reduced_chat_history["chat_history"],
             url_sources=url_list,
         )
-    print("Updated docs", docs)
     return docs
 
 
 def handle_errors(arg0, e):
     """Handles all incoming errors and formats the error message for streamlit output."""
-    error_message = f"{arg0}{e}"
-    return st.error(error_message)
+    return f"{arg0}{e}"
 
 
 class TokenLimitExceededException(Exception):
@@ -483,7 +472,7 @@ def get_answer(query: str) -> str:
 
 def get_improved_answer(query):
     try:
-        relevant_docs = get_relevant_docs(retriever, query)
+        relevant_docs = pipe_get_relevant_docs(pipe_retriever, query)
     except Exception as e:
         return handle_errors(
             "Error occurred in Contextual Compression Pipeline. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
@@ -526,9 +515,6 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
     )
 
     if len(enc.encode(formatted_prompt)) < MODEL_TOKEN_LIMIT_PER_QUERY:
-        print(
-            "Length of formatted prompt is less than 4097 tokens. passing prompt to openAI"
-        )
         return qa_llm.run(
             {
                 "context": relevant_docs,
@@ -538,7 +524,6 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
             }
         )
     # Reduce chat history first
-    print("Length of formatted prompt exceeded 4097 limit. Reducing Chat History.")
     reduced_chat_history_dict = reduce_chat_history_tokens(chat_history_dict)
     formatted_prompt_with_reduced_history = prompt.format(
         human_input=query,
@@ -551,9 +536,6 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
         len(enc.encode(formatted_prompt_with_reduced_history))
         < MODEL_TOKEN_LIMIT_PER_QUERY
     ):
-        print(
-            "Length of prompt with reduced chat history is less than 4097 tokens. passing prompt to openAI"
-        )
         return qa_llm.run(
             {
                 "context": relevant_docs,
@@ -562,9 +544,6 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
                 "url_sources": clean_url_list,
             }
         )
-    print(
-        "Length of prompt with reduced chat history exceeded 4097 tokens. Reducing relevant documents retrieved."
-    )
     shorter_relevant_docs = reduce_doc_tokens(
         relevant_docs,
         formatted_prompt_with_reduced_history,
@@ -582,9 +561,6 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
         raise TokenLimitExceededException(
             "Final prompt still exceeds 4097 tokens. Please reduce prompt length."
         )
-    print(
-        "Length of prompt with reduced chat history and less documents is less than 4097 tokens. passing prompt to openAI."
-    )
     return qa_llm.run(
         {
             "context": relevant_docs,
