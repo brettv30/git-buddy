@@ -35,6 +35,9 @@ if st.session_state.messages[-1]["role"] != "assistant":
 
             if "Error occurred" in chat_response:
                 st.error(chat_response)
+
+                # What about including a function here that clears out the chat history entirely if we run into an error?
+
             else:
                 st.write(chat_response)
 
