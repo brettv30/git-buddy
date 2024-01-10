@@ -2,7 +2,6 @@ import re
 import time
 import tiktoken
 import pinecone
-import warnings
 import streamlit as st
 from langchain.chains import LLMChain
 from bs4 import BeautifulSoup as Soup
@@ -14,19 +13,15 @@ from langchain.tools import DuckDuckGoSearchResults
 from langchain.document_loaders import DirectoryLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import CohereRerank
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain.document_loaders.recursive_url_loader import RecursiveUrlLoader
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain_community.document_transformers import EmbeddingsRedundantFilter
-from langchain.retrievers.document_compressors import DocumentCompressorPipeline
-
-# Settings the warnings to be ignored
-warnings.filterwarnings("ignore")
 
 # Set environment variables
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
+COHERE_API_KEY = st.secrets["COHERE_API_KEY"]
 
 # Set Const Variables
 MODEL_REQUEST_LIMIT_PER_MINUTE = 500
@@ -35,7 +30,7 @@ EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
 RETRIEVED_DOCUMENTS = (
-    8  # This one can vary while we test out different retrieval methods
+    50  # This one can vary while we test out different retrieval methods
 )
 PROMPT_TEMPLATE = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
@@ -203,18 +198,9 @@ def initialize_components():
     qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
     search = DuckDuckGoSearchResults()
 
-    relevant_filter = LLMChainExtractor.from_llm(llm)
+    compressor = CohereRerank(top_n=3)
     compression_retriever = ContextualCompressionRetriever(
-        base_compressor=relevant_filter, base_retriever=retriever
-    )
-
-    redundant_filter = EmbeddingsRedundantFilter(embeddings=embeddings)
-    pipeline_compressor = DocumentCompressorPipeline(
-        transformers=[relevant_filter, redundant_filter]
-    )
-
-    pipeline_compression_retriever = ContextualCompressionRetriever(
-        base_compressor=pipeline_compressor, base_retriever=retriever
+        base_compressor=compressor, base_retriever=retriever
     )
 
     return (
@@ -224,7 +210,6 @@ def initialize_components():
         search,
         memory,
         compression_retriever,
-        pipeline_compression_retriever,
     )
 
 
@@ -236,7 +221,6 @@ def initialize_components():
     search,
     memory,
     retriever,
-    pipe_retriever,
 ) = initialize_components()
 
 
@@ -253,11 +237,6 @@ def get_similar_docs(
 
 def get_relevant_docs(retriever, query):
     """Retrieve relevant documents from the index using the Contextual Compression Retriever"""
-    return retriever.get_relevant_documents(query)
-
-
-def pipe_get_relevant_docs(retriever, query):
-    """Retrieve relevant documents from the index using the Pipeline Contextual Compression Retriever"""
     return retriever.get_relevant_documents(query)
 
 
@@ -472,7 +451,7 @@ def get_answer(query: str) -> str:
 
 def get_improved_answer(query):
     try:
-        relevant_docs = pipe_get_relevant_docs(pipe_retriever, query)
+        relevant_docs = get_relevant_docs(retriever, query)
     except Exception as e:
         return handle_errors(
             "Error occurred in Contextual Compression Pipeline. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
