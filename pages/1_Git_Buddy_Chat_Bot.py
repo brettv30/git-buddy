@@ -33,8 +33,10 @@ if st.session_state.messages[-1]["role"] != "assistant":
                 st.session_state.messages[-1]["content"]
             )
 
-            # Write the agent's response to the chat
-            st.write(chat_response)
+            if "Error occurred" in chat_response:
+                st.error(chat_response)
+            else:
+                st.write(chat_response)
 
             # Set the message dictionary that will append to the messages list
             message = {
