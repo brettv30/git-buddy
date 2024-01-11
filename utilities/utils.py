@@ -7,12 +7,12 @@ import streamlit as st
 from openai import RateLimitError
 from langchain.chains import LLMChain
 from bs4 import BeautifulSoup as Soup
-from langchain.vectorstores import Pinecone
-from langchain.chat_models import ChatOpenAI
+from langchain_community.vectorstores import Pinecone
+from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.docstore.document import Document
-from langchain.tools import DuckDuckGoSearchResults
-from langchain.document_loaders import DirectoryLoader
+from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_community.document_loaders import DirectoryLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import CohereRerank
