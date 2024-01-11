@@ -44,19 +44,8 @@ if st.session_state.messages[-1]["role"] != "assistant":
                 set_chat_messages(chat_response)
                 with st.status("Looking for issues...", expanded=True) as status:
                     st.write("Clearing Git Buddy's memory to free up token space...")
-                    time.sleep(5)
-                    st.write("3...")
-                    time.sleep(2)
-                    st.write("2...")
-                    time.sleep(2)
-                    st.write("1...")
-                    time.sleep(2)
                     clear_memory()
-                    st.write("Clear!")
-                    time.sleep(2)
-                    st.write(
-                        "Git Buddy's memory is empty. It is ready for a new question"
-                    )
+                    st.write("Memory cleared...")
                     status.update(
                         label="Ready for more questions!",
                         state="complete",

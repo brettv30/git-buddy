@@ -360,7 +360,7 @@ class TokenLimitExceededException(Exception):
 
 def get_improved_answer(query):
     try:
-        st.write("Retrieving relevant documents from Pinecone Vectorstore....")
+        st.write("Retrieving relevant documents from Pinecone....")
         relevant_docs = get_relevant_docs(retriever, query)
     except Exception as e:
         return handle_errors(
@@ -420,7 +420,7 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
     )
 
     if len(enc.encode(formatted_prompt)) < MODEL_TOKEN_LIMIT_PER_QUERY:
-        st.write("Within the API token limit. Running LLM...")
+        st.write("Within the OpenAI API token limit. Running LLM...")
         return qa_llm.run(
             {
                 "context": relevant_docs,
@@ -430,7 +430,9 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
             }
         )
 
-    st.write("Reached token limit: Removing chat history interactions...")
+    st.write(
+        "Reached the OpenAI API token limit: Removing interactions from chat history..."
+    )
     reduced_chat_history_dict = reduce_chat_history_tokens(chat_history_dict)
     formatted_prompt_with_reduced_history = prompt.format(
         human_input=query,
@@ -444,7 +446,7 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
         < MODEL_TOKEN_LIMIT_PER_QUERY
     ):
         st.write(
-            "Within the API token limit after reducing chat history. Running LLM..."
+            "Within the OpenAI API token limit after reducing chat history. Running LLM..."
         )
         return qa_llm.run(
             {
@@ -455,7 +457,9 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
             }
         )
 
-    st.write("Still at token limit: Reducing number of retrieved documents...")
+    st.write(
+        "Still at the OpenAI API token limit: Reducing number of retrieved documents..."
+    )
     shorter_relevant_docs = reduce_doc_tokens(
         relevant_docs,
         formatted_prompt_with_reduced_history,
@@ -471,7 +475,7 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
     )
     if len(enc.encode(processed_prompt)) < MODEL_TOKEN_LIMIT_PER_QUERY:
         st.write(
-            "Within the API token limit after reducing documents and chat history. Running LLM..."
+            "Within the OpenAI API token limit after reducing documents and chat history. Running LLM..."
         )
         return qa_llm.run(
             {
