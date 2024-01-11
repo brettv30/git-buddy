@@ -1,5 +1,6 @@
+import time
 import streamlit as st
-from utilities.utils import get_improved_answer
+from utilities.utils import get_improved_answer, set_chat_messages, clear_memory
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -28,22 +29,39 @@ for message in st.session_state.messages:
 if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            # From Utils
-            chat_response = get_improved_answer(
-                st.session_state.messages[-1]["content"]
-            )
+            with st.status("Accessing Tools...", expanded=True) as status:
+                chat_response = get_improved_answer(
+                    st.session_state.messages[-1]["content"]
+                )
+                status.update(
+                    label="Look here for a play-by-play...",
+                    state="complete",
+                    expanded=False,
+                )
 
             if "Error occurred" in chat_response:
                 st.error(chat_response)
-
-                # What about including a function here that clears out the chat history entirely if we run into an error?
-
+                set_chat_messages(chat_response)
+                with st.status("Looking for issues...", expanded=True) as status:
+                    st.write("Clearing Git Buddy's memory to free up token space...")
+                    time.sleep(5)
+                    st.write("3...")
+                    time.sleep(2)
+                    st.write("2...")
+                    time.sleep(2)
+                    st.write("1...")
+                    time.sleep(2)
+                    clear_memory()
+                    st.write("Clear!")
+                    time.sleep(2)
+                    st.write(
+                        "Git Buddy's memory is empty. It is ready for a new question"
+                    )
+                    status.update(
+                        label="Ready for more questions!",
+                        state="complete",
+                        expanded=False,
+                    )
             else:
                 st.write(chat_response)
-
-            # Set the message dictionary that will append to the messages list
-            message = {
-                "role": "assistant",
-                "content": chat_response,
-            }
-            st.session_state.messages.append(message)
+                set_chat_messages(chat_response)
