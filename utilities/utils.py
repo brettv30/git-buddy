@@ -170,7 +170,7 @@ def clean_docs(url_docs):
     ]
 
 
-def split_docs(documents, chunk_size=350, chunk_overlap=50):
+def split_docs(documents, chunk_size=400, chunk_overlap=50):
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
@@ -191,7 +191,7 @@ def initialize_components():
     memory = ConversationBufferWindowMemory(
         memory_key="chat_history",
         input_key="human_input",
-        k=4,
+        k=3,
     )
     prompt = PromptTemplate(
         input_variables=["chat_history", "context", "human_input", "url_sources"],
