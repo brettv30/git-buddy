@@ -2,8 +2,8 @@
 import time
 import pinecone
 import streamlit as st
-from langchain.vectorstores import Pinecone
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Pinecone
+from langchain_openai import OpenAIEmbeddings
 from utils import load_docs, load_pdfs, flatten_list_of_lists, clean_docs, split_docs
 
 directory = "data"
