@@ -1,8 +1,10 @@
 import re
 import time
+import random
 import tiktoken
 import pinecone
 import streamlit as st
+from openai import RateLimitError
 from langchain.chains import LLMChain
 from bs4 import BeautifulSoup as Soup
 from langchain.vectorstores import Pinecone
@@ -30,7 +32,7 @@ EMBEDDINGS_MODEL = "text-embedding-ada-002"
 INDEX_NAME = "git-buddy-index"
 MODEL_NAME = "gpt-3.5-turbo"
 RETRIEVED_DOCUMENTS = (
-    50  # This one can vary while we test out different retrieval methods
+    100  # This one can vary while we test out different retrieval methods
 )
 PROMPT_TEMPLATE = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
@@ -168,7 +170,7 @@ def clean_docs(url_docs):
     ]
 
 
-def split_docs(documents, chunk_size=400, chunk_overlap=50):
+def split_docs(documents, chunk_size=350, chunk_overlap=50):
     text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
@@ -198,7 +200,7 @@ def initialize_components():
     qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
     search = DuckDuckGoSearchResults()
 
-    compressor = CohereRerank(top_n=3)
+    compressor = CohereRerank()
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=compressor, base_retriever=retriever
     )
@@ -307,10 +309,14 @@ def reduce_chat_history_tokens(chat_history_dict):
     # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
     combos = ["".join(match) for match in matches]
 
-    while len(combos) > 2:
+    while len(combos) > 1:
         combos.pop(0)
 
     return {"chat_history": "\n".join(combos)}
+
+
+def clear_memory():
+    memory.clear()
 
 
 def reduce_doc_tokens(
@@ -354,6 +360,7 @@ class TokenLimitExceededException(Exception):
 
 def get_improved_answer(query):
     try:
+        st.write("Retrieving relevant documents from Pinecone Vectorstore....")
         relevant_docs = get_relevant_docs(retriever, query)
     except Exception as e:
         return handle_errors(
@@ -361,7 +368,9 @@ def get_improved_answer(query):
             e,
         )
     try:
+        st.write("Extracting sources from documents...")
         sources = get_sources(relevant_docs)
+        st.write("Finding related webpages...")
         links = get_search_query(sources)
     except Exception as e:
         return handle_errors(
@@ -376,15 +385,29 @@ def get_improved_answer(query):
             "Error occurred while cleaning up source URLs. Please try query again. Additional Error Information: ",
             e,
         )
-
-    time.sleep(60.0 / MODEL_REQUEST_LIMIT_PER_MINUTE)
-
     try:
-        return verify_api_limits(query, relevant_docs, clean_url_list)
+        st.write("Verifying we are within API limitations...")
+        return make_request_with_retry(
+            lambda: verify_api_limits(query, relevant_docs, clean_url_list)
+        )
     except Exception as e:
         return handle_errors(
             "Error occurred while generating an answer with LLMChain: ", e
         )
+
+
+# Define the make_request_with_retry function
+def make_request_with_retry(api_call, max_retries=5):
+    for i in range(max_retries):
+        try:
+            return api_call()
+        except RateLimitError:
+            st.write(
+                "Rate Limit was hit. Waiting a little while before trying again..."
+            )
+            wait_time = (2**i) + random.random()
+            time.sleep(wait_time)
+    raise Exception("Still hitting rate limit after max (5) retries")
 
 
 def verify_api_limits(query, relevant_docs, clean_url_list):
@@ -397,6 +420,7 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
     )
 
     if len(enc.encode(formatted_prompt)) < MODEL_TOKEN_LIMIT_PER_QUERY:
+        st.write("Within the API token limit. Running LLM...")
         return qa_llm.run(
             {
                 "context": relevant_docs,
@@ -405,7 +429,8 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
                 "url_sources": clean_url_list,
             }
         )
-    # Reduce chat history first
+
+    st.write("Reached token limit: Removing chat history interactions...")
     reduced_chat_history_dict = reduce_chat_history_tokens(chat_history_dict)
     formatted_prompt_with_reduced_history = prompt.format(
         human_input=query,
@@ -418,6 +443,9 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
         len(enc.encode(formatted_prompt_with_reduced_history))
         < MODEL_TOKEN_LIMIT_PER_QUERY
     ):
+        st.write(
+            "Within the API token limit after reducing chat history. Running LLM..."
+        )
         return qa_llm.run(
             {
                 "context": relevant_docs,
@@ -426,6 +454,8 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
                 "url_sources": clean_url_list,
             }
         )
+
+    st.write("Still at token limit: Reducing number of retrieved documents...")
     shorter_relevant_docs = reduce_doc_tokens(
         relevant_docs,
         formatted_prompt_with_reduced_history,
@@ -439,15 +469,29 @@ def verify_api_limits(query, relevant_docs, clean_url_list):
         chat_history=reduced_chat_history_dict["chat_history"],
         url_sources=clean_url_list,
     )
-    if len(enc.encode(processed_prompt)) > MODEL_TOKEN_LIMIT_PER_QUERY:
-        raise TokenLimitExceededException(
-            "Final prompt still exceeds 4097 tokens. Please reduce prompt length."
+    if len(enc.encode(processed_prompt)) < MODEL_TOKEN_LIMIT_PER_QUERY:
+        st.write(
+            "Within the API token limit after reducing documents and chat history. Running LLM..."
         )
-    return qa_llm.run(
-        {
-            "context": relevant_docs,
-            "human_input": query,
-            "chat_history": reduced_chat_history_dict["chat_history"],
-            "url_sources": clean_url_list,
-        }
+        return qa_llm.run(
+            {
+                "context": relevant_docs,
+                "human_input": query,
+                "chat_history": reduced_chat_history_dict["chat_history"],
+                "url_sources": clean_url_list,
+            }
+        )
+
+    st.write("Couldn't fall under the OpenAI API token limit...")
+    raise TokenLimitExceededException(
+        "Final prompt still exceeds 4097 tokens. Please ask your question again."
     )
+
+
+def set_chat_messages(chat_response):
+    # Set the message dictionary that will append to the messages list
+    message = {
+        "role": "assistant",
+        "content": chat_response,
+    }
+    st.session_state.messages.append(message)
