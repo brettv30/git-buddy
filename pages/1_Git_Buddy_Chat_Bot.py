@@ -1,6 +1,5 @@
-import time
 import streamlit as st
-from utilities.utils import get_improved_answer, set_chat_messages, clear_memory
+from utilities.utils import get_improved_answer, chatMessenger, PromptParser
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -41,10 +40,10 @@ if st.session_state.messages[-1]["role"] != "assistant":
 
             if "Error occurred" in chat_response:
                 st.error(chat_response)
-                set_chat_messages(chat_response)
+                chatMessenger.set_chat_messages(chat_response)
                 with st.status("Looking for issues...", expanded=True) as status:
                     st.write("Clearing Git Buddy's memory to free up token space...")
-                    clear_memory()
+                    PromptParser.clear_memory()
                     st.write("Memory cleared...")
                     status.update(
                         label="Ready for more questions!",
@@ -53,4 +52,4 @@ if st.session_state.messages[-1]["role"] != "assistant":
                     )
             else:
                 st.write(chat_response)
-                set_chat_messages(chat_response)
+                chatMessenger.set_chat_messages(chat_response)
