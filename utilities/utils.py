@@ -247,7 +247,7 @@ class componentInitializer:
     def __init__(
         self,
         config,
-        memory=3,
+        memory=5,
         temperature=0.5,
     ):
         self.config = config
@@ -298,8 +298,11 @@ class componentInitializer:
 
 
 class APIHandler:
-    def __init__(self, config, llm_prompt, chat_memory, qa_llm, max_retries=5):
+    def __init__(
+        self, config, prompt_parser, llm_prompt, chat_memory, qa_llm, max_retries=5
+    ):
         self.config = config
+        self.prompt_parser = prompt_parser
         self.llm_prompt = llm_prompt
         self.chat_memory = chat_memory
         self.qa_llm = qa_llm
@@ -373,7 +376,7 @@ class APIHandler:
             st.write(
                 "Reached the OpenAI API token limit: Removing interactions from chat history..."
             )
-            reduced_chat_history_dict = PromptParser.reduce_chat_history_tokens(
+            reduced_chat_history_dict = self.prompt_parser.reduce_chat_history_tokens(
                 chat_history_dict
             )
             formatted_prompt_with_reduced_history = self.llm_prompt.format(
@@ -402,7 +405,7 @@ class APIHandler:
             st.write(
                 "Still at the OpenAI API token limit: Reducing number of retrieved documents..."
             )
-            shorter_relevant_docs = PromptParser.reduce_doc_tokens(
+            shorter_relevant_docs = self.prompt_parser.reduce_doc_tokens(
                 relevant_docs,
                 formatted_prompt_with_reduced_history,
                 query,
@@ -462,7 +465,7 @@ class PromptParser:
         # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
         combos = ["".join(match) for match in matches]
 
-        while len(combos) > 1:
+        while len(combos) > 2:
             combos.pop(0)
 
         return {"chat_history": "\n".join(combos)}
