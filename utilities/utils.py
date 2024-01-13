@@ -247,9 +247,11 @@ class componentInitializer:
     def __init__(
         self,
         config,
+        memory=3,
         temperature=0.5,
     ):
         self.config = config
+        self.doc_memory = memory
         self.temperature = temperature
 
     @st.cache_resource
@@ -272,7 +274,7 @@ class componentInitializer:
         memory = ConversationBufferWindowMemory(
             memory_key="chat_history",
             input_key="human_input",
-            k=3,
+            k=_self.doc_memory,
         )
         prompt = PromptTemplate(
             input_variables=["chat_history", "context", "human_input", "url_sources"],
@@ -326,7 +328,9 @@ class APIHandler:
                 )
                 wait_time = (2**i) + random.random()
                 time.sleep(wait_time)
-        raise Exception("Still hitting rate limit after max (5) retries")
+        raise APIRequestException(
+            "OpenAI API Request Rate Limit was reached. Please wait a few minutes before trying again."
+        )
 
     def verify_api_limits(self, query, relevant_docs, clean_url_list):
         """
@@ -343,93 +347,94 @@ class APIHandler:
         Raises:
             TokenLimitExceededException: If the final prompt exceeds the token limit.
         """
-        chat_history_dict = self.chat_memory.load_memory_variables({})
-        formatted_prompt = self.llm_prompt.format(
-            human_input=query,
-            context=relevant_docs,
-            chat_history=chat_history_dict["chat_history"],
-            url_sources=clean_url_list,
-        )
-
-        if (
-            len(self.config.encoding.encode(formatted_prompt))
-            < self.config.model_token_limit_per_query
-        ):
-            st.write("Within the OpenAI API token limit. Running LLM...")
-            return self.qa_llm.run(
-                {
-                    "context": relevant_docs,
-                    "human_input": query,
-                    "chat_history": self.chat_memory.load_memory_variables({}),
-                    "url_sources": clean_url_list,
-                }
+        try:
+            chat_history_dict = self.chat_memory.load_memory_variables({})
+            formatted_prompt = self.llm_prompt.format(
+                human_input=query,
+                context=relevant_docs,
+                chat_history=chat_history_dict["chat_history"],
+                url_sources=clean_url_list,
             )
 
-        st.write(
-            "Reached the OpenAI API token limit: Removing interactions from chat history..."
-        )
-        reduced_chat_history_dict = PromptParser.reduce_chat_history_tokens(
-            chat_history_dict
-        )
-        formatted_prompt_with_reduced_history = self.llm_prompt.format(
-            human_input=query,
-            context=relevant_docs,
-            chat_history=reduced_chat_history_dict["chat_history"],
-            url_sources=clean_url_list,
-        )
+            if (
+                len(self.config.encoding.encode(formatted_prompt))
+                < self.config.model_token_limit_per_query
+            ):
+                st.write("Within the OpenAI API token limit. Running LLM...")
+                return self.qa_llm.run(
+                    {
+                        "context": relevant_docs,
+                        "human_input": query,
+                        "chat_history": self.chat_memory.load_memory_variables({}),
+                        "url_sources": clean_url_list,
+                    }
+                )
 
-        if (
-            len(self.config.encoding.encode(formatted_prompt_with_reduced_history))
-            < self.config.model_token_limit_per_query
-        ):
             st.write(
-                "Within the OpenAI API token limit after reducing chat history. Running LLM..."
+                "Reached the OpenAI API token limit: Removing interactions from chat history..."
             )
-            return self.qa_llm.run(
-                {
-                    "context": relevant_docs,
-                    "human_input": query,
-                    "chat_history": reduced_chat_history_dict["chat_history"],
-                    "url_sources": clean_url_list,
-                }
+            reduced_chat_history_dict = PromptParser.reduce_chat_history_tokens(
+                chat_history_dict
+            )
+            formatted_prompt_with_reduced_history = self.llm_prompt.format(
+                human_input=query,
+                context=relevant_docs,
+                chat_history=reduced_chat_history_dict["chat_history"],
+                url_sources=clean_url_list,
             )
 
-        st.write(
-            "Still at the OpenAI API token limit: Reducing number of retrieved documents..."
-        )
-        shorter_relevant_docs = PromptParser.reduce_doc_tokens(
-            relevant_docs,
-            formatted_prompt_with_reduced_history,
-            query,
-            reduced_chat_history_dict,
-            clean_url_list,
-        )
-        processed_prompt = self.llm_prompt.format(
-            human_input=query,
-            context=shorter_relevant_docs,
-            chat_history=reduced_chat_history_dict["chat_history"],
-            url_sources=clean_url_list,
-        )
-        if (
-            len(self.config.encoding.encode(processed_prompt))
-            < self.config.model_token_limit_per_query
-        ):
+            if (
+                len(self.config.encoding.encode(formatted_prompt_with_reduced_history))
+                < self.config.model_token_limit_per_query
+            ):
+                st.write(
+                    "Within the OpenAI API token limit after reducing chat history. Running LLM..."
+                )
+                return self.qa_llm.run(
+                    {
+                        "context": relevant_docs,
+                        "human_input": query,
+                        "chat_history": reduced_chat_history_dict["chat_history"],
+                        "url_sources": clean_url_list,
+                    }
+                )
+
             st.write(
-                "Within the OpenAI API token limit after reducing documents and chat history. Running LLM..."
+                "Still at the OpenAI API token limit: Reducing number of retrieved documents..."
             )
-            return self.qa_llm.run(
-                {
-                    "context": relevant_docs,
-                    "human_input": query,
-                    "chat_history": reduced_chat_history_dict["chat_history"],
-                    "url_sources": clean_url_list,
-                }
+            shorter_relevant_docs = PromptParser.reduce_doc_tokens(
+                relevant_docs,
+                formatted_prompt_with_reduced_history,
+                query,
+                reduced_chat_history_dict,
+                clean_url_list,
             )
-
-        st.write("Couldn't fall under the OpenAI API token limit...")
-        raise TokenLimitExceededException(
-            "Final prompt still exceeds 4097 tokens. Please ask your question again."
-        )
+            processed_prompt = self.llm_prompt.format(
+                human_input=query,
+                context=shorter_relevant_docs,
+                chat_history=reduced_chat_history_dict["chat_history"],
+                url_sources=clean_url_list,
+            )
+            if (
+                len(self.config.encoding.encode(processed_prompt))
+                < self.config.model_token_limit_per_query
+            ):
+                st.write(
+                    "Within the OpenAI API token limit after reducing documents and chat history. Running LLM..."
+                )
+                return self.qa_llm.run(
+                    {
+                        "context": relevant_docs,
+                        "human_input": query,
+                        "chat_history": reduced_chat_history_dict["chat_history"],
+                        "url_sources": clean_url_list,
+                    }
+                )
+        except Exception as e:
+            st.write("Couldn't fall under the OpenAI API token limit...")
+            return TokenLimitExceededException(
+                "Final prompt still exceeds 4097 tokens. Please ask your question again."
+            )
 
 
 class PromptParser:
@@ -559,14 +564,46 @@ class DocumentParser:
 class TokenLimitExceededException(Exception):
     """
     Exception raised when the token limit is exceeded.
-
-    Attributes:
-        message (str): Explanation of the error.
     """
 
-    def __init__(self, message="Token limit exceeded"):
+    def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+
+class APIRequestException(Exception):
+    """Exception raised for errors in API requests."""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class DocumentRetrievalException(Exception):
+    """Exception raised for errors retrieving documents."""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class SourceExtractionException(Exception):
+    """Exception raised for errors extracting document sources."""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class URLCleaningException(Exception):
+    """Exception raised for errors cleaning URLs."""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class LLMChainException(Exception):
+    """Exception raised for errors with LLMChain."""
+
+    def __init__(self, message):
+        super().__init__(message)
 
 
 class GitBuddyChatBot:
@@ -581,9 +618,8 @@ class GitBuddyChatBot:
             st.write("Retrieving relevant documents from Pinecone....")
             relevant_docs = self.doc_retriever.get_relevant_documents(query)
         except Exception as e:
-            return (
-                "Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
-                e,
+            return DocumentRetrievalException(
+                f"Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub. Additional Error Information: {e}"
             )
         try:
             st.write("Extracting sources from documents...")
@@ -591,17 +627,15 @@ class GitBuddyChatBot:
             st.write("Finding related webpages...")
             links = self.doc_parser.get_search_query(query, sources)
         except Exception as e:
-            return (
-                "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
-                e,
+            return SourceExtractionException(
+                f"Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub. Additional Error Information: {e}"
             )
         try:
             url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
             clean_url_list = [element for element in links if element != url_to_remove]
         except Exception as e:
-            return (
-                "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
-                e,
+            return URLCleaningException(
+                f"Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub. Additional Error Information: {e}"
             )
         try:
             st.write("Verifying we are within API limitations...")
@@ -611,7 +645,9 @@ class GitBuddyChatBot:
                 )
             )
         except Exception as e:
-            return "Error occurred while generating an answer with LLMChain: ", e
+            return LLMChainException(
+                f"Error occurred while generating an answer with LLMChain: {e}"
+            )
 
     @staticmethod
     def set_chat_messages(chat_response):
