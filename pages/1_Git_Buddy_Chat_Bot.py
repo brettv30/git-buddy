@@ -18,11 +18,11 @@ config = Config()
 all_components = componentInitializer(config)
 
 (prompt, qa_llm, search, memory, retriever) = all_components.initialize_components()
+prompt_parser = PromptParser(config, memory, prompt)
 
-api_handler = APIHandler(config, prompt, memory, qa_llm)
+api_handler = APIHandler(config, prompt_parser, prompt, memory, qa_llm)
 doc_parser = DocumentParser(search)
 git_buddy = GitBuddyChatBot(config, api_handler, retriever, doc_parser)
-prompt_parser = PromptParser(config, memory, prompt)
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -56,7 +56,7 @@ if st.session_state.messages[-1]["role"] != "assistant":
                     expanded=False,
                 )
 
-            if "Error occurred" in chat_response:
+            if type(chat_response) is not str:
                 st.error(chat_response)
                 git_buddy.set_chat_messages(chat_response)
                 with st.status("Looking for issues...", expanded=True) as status:
