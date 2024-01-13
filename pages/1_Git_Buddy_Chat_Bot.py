@@ -1,10 +1,28 @@
 import streamlit as st
-from utilities.utils import get_improved_answer, chatMessenger, PromptParser
+from utilities.utils import (
+    Config,
+    componentInitializer,
+    APIHandler,
+    DocumentParser,
+    GitBuddyChatBot,
+    PromptParser,
+)
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
 
 st.title("Git Buddy")
+
+# Initialize chatbot components
+config = Config()
+all_components = componentInitializer(config)
+
+(prompt, qa_llm, search, memory, retriever) = all_components.initialize_components()
+
+api_handler = APIHandler(config, prompt, memory, qa_llm)
+doc_parser = DocumentParser(search)
+git_buddy = GitBuddyChatBot(config, api_handler, retriever, doc_parser)
+prompt_parser = PromptParser(config, memory, prompt)
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -29,7 +47,7 @@ if st.session_state.messages[-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             with st.status("Accessing Tools...", expanded=True) as status:
-                chat_response = get_improved_answer(
+                chat_response = git_buddy.get_improved_answer(
                     st.session_state.messages[-1]["content"]
                 )
                 status.update(
@@ -40,10 +58,10 @@ if st.session_state.messages[-1]["role"] != "assistant":
 
             if "Error occurred" in chat_response:
                 st.error(chat_response)
-                chatMessenger.set_chat_messages(chat_response)
+                git_buddy.set_chat_messages(chat_response)
                 with st.status("Looking for issues...", expanded=True) as status:
                     st.write("Clearing Git Buddy's memory to free up token space...")
-                    PromptParser.clear_memory()
+                    prompt_parser.clear_memory()
                     st.write("Memory cleared...")
                     status.update(
                         label="Ready for more questions!",
@@ -52,4 +70,4 @@ if st.session_state.messages[-1]["role"] != "assistant":
                     )
             else:
                 st.write(chat_response)
-                chatMessenger.set_chat_messages(chat_response)
+                git_buddy.set_chat_messages(chat_response)

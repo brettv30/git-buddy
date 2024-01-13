@@ -23,7 +23,20 @@ from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 
 class Config:
     """
-    Configuration class to encapsulate all necessary global variables.
+    Config class to hold configuration settings for the application.
+
+    Attributes:
+        openai_api_key (str): API key for OpenAI.
+        pinecone_api_key (str): API key for Pinecone.
+        cohere_api_key (str): API key for Cohere.
+        model_request_limit_per_minute (int): Limit for model requests per minute.
+        model_token_limit_per_query (int): Token limit for each query to the model.
+        directory (str): Directory path for storing data.
+        embeddings_model (str): Model used for text embeddings.
+        index_name (str): Name of the Pinecone index.
+        model_name (str): Name of the language model.
+        retrieved_documents (int): Number of documents to retrieve for each query.
+        prompt_template (str): Template for the chatbot prompt.
     """
 
     def __init__(self):
@@ -102,6 +115,16 @@ Additional Sources:"""
 
 
 class DocumentManager:
+    """
+    Manages the loading and processing of documents.
+
+    Args:
+        config (Config): Configuration settings for the document manager.
+        max_depth (int): Maximum depth for recursive loading of documents.
+        chunk_size (int): Size of each chunk in number of characters.
+        chunk_overlap (int): Number of characters to overlap between chunks.
+    """
+
     def __init__(self, config, max_depth=6, chunk_size=400, chunk_overlap=50):
         self.config = config
         self.max_depth = max_depth
@@ -114,7 +137,6 @@ class DocumentManager:
 
         Args:
             url (str): The base URL from which to start loading documents.
-            max_depth (int): The maximum depth for recursive loading.
 
         Returns:
             list: A list of loaded documents.
@@ -221,28 +243,31 @@ class DocumentManager:
         return text_splitter.split_documents(documents)
 
 
-class APIHandler:
-    def __init__(self, config, temperature=0.5, max_retries=5):
+class componentInitializer:
+    def __init__(
+        self,
+        config,
+        temperature=0.5,
+    ):
         self.config = config
         self.temperature = temperature
-        self.max_retries = max_retries
 
-    # Initialize Pinecone and LangChain components
-    def initialize_components(self):
+    @st.cache_resource
+    def initialize_components(_self):
         """
         Initialize components for Pinecone and LangChain including embeddings, index, retriever, etc.
 
         Returns:
             tuple: A tuple containing initialized components such as prompt, index, QA LLM, search, memory, and compression retriever.
         """
-        pinecone.init(api_key=self.config.pinecone_api_key, environment="gcp-starter")
-        embeddings = OpenAIEmbeddings(model=self.config.embeddings_model)
-        index = Pinecone.from_existing_index(self.config.index_name, embeddings)
+        pinecone.init(api_key=_self.config.pinecone_api_key, environment="gcp-starter")
+        embeddings = OpenAIEmbeddings(model=_self.config.embeddings_model)
+        index = Pinecone.from_existing_index(_self.config.index_name, embeddings)
         retriever = index.as_retriever(
-            search_type="mmr", search_kwargs={"k": self.config.retrieved_documents}
+            search_type="mmr", search_kwargs={"k": _self.config.retrieved_documents}
         )
         llm = ChatOpenAI(
-            model_name=self.config.model_name, temperature=self.temperature
+            model_name=_self.config.model_name, temperature=_self.temperature
         )
         memory = ConversationBufferWindowMemory(
             memory_key="chat_history",
@@ -251,7 +276,7 @@ class APIHandler:
         )
         prompt = PromptTemplate(
             input_variables=["chat_history", "context", "human_input", "url_sources"],
-            template=self.config.prompt_template,
+            template=_self.config.prompt_template,
         )
         qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
         search = DuckDuckGoSearchResults()
@@ -263,31 +288,20 @@ class APIHandler:
 
         return (
             prompt,
-            index,
             qa_llm,
             search,
             memory,
             compression_retriever,
         )
 
-    def get_similar_docs(self, index, query: str, score: bool = False) -> list:
-        """
-        Retrieve similar documents from the index based on the given query.
 
-        Args:
-            index (Pinecone): The Pinecone index to search in.
-            query (str): The query string to search for similar documents.
-            k (int): The number of documents to retrieve.
-            score (bool): Whether to return scores along with documents.
-
-        Returns:
-            list: A list of similar documents or (document, score) pairs.
-        """
-        return (
-            index.similarity_search_with_score(query, k=self.config.retrieved_documents)
-            if score
-            else index.similarity_search(query, k=self.config.retrieved_documents)
-        )
+class APIHandler:
+    def __init__(self, config, llm_prompt, chat_memory, qa_llm, max_retries=5):
+        self.config = config
+        self.llm_prompt = llm_prompt
+        self.chat_memory = chat_memory
+        self.qa_llm = qa_llm
+        self.max_retries = max_retries
 
     def make_request_with_retry(self, api_call):
         """
@@ -329,8 +343,8 @@ class APIHandler:
         Raises:
             TokenLimitExceededException: If the final prompt exceeds the token limit.
         """
-        chat_history_dict = memory.load_memory_variables({})
-        formatted_prompt = prompt.format(
+        chat_history_dict = self.chat_memory.load_memory_variables({})
+        formatted_prompt = self.llm_prompt.format(
             human_input=query,
             context=relevant_docs,
             chat_history=chat_history_dict["chat_history"],
@@ -342,11 +356,11 @@ class APIHandler:
             < self.config.model_token_limit_per_query
         ):
             st.write("Within the OpenAI API token limit. Running LLM...")
-            return qa_llm.run(
+            return self.qa_llm.run(
                 {
                     "context": relevant_docs,
                     "human_input": query,
-                    "chat_history": memory.load_memory_variables({}),
+                    "chat_history": self.chat_memory.load_memory_variables({}),
                     "url_sources": clean_url_list,
                 }
             )
@@ -357,7 +371,7 @@ class APIHandler:
         reduced_chat_history_dict = PromptParser.reduce_chat_history_tokens(
             chat_history_dict
         )
-        formatted_prompt_with_reduced_history = prompt.format(
+        formatted_prompt_with_reduced_history = self.llm_prompt.format(
             human_input=query,
             context=relevant_docs,
             chat_history=reduced_chat_history_dict["chat_history"],
@@ -371,7 +385,7 @@ class APIHandler:
             st.write(
                 "Within the OpenAI API token limit after reducing chat history. Running LLM..."
             )
-            return qa_llm.run(
+            return self.qa_llm.run(
                 {
                     "context": relevant_docs,
                     "human_input": query,
@@ -390,7 +404,7 @@ class APIHandler:
             reduced_chat_history_dict,
             clean_url_list,
         )
-        processed_prompt = prompt.format(
+        processed_prompt = self.llm_prompt.format(
             human_input=query,
             context=shorter_relevant_docs,
             chat_history=reduced_chat_history_dict["chat_history"],
@@ -403,7 +417,7 @@ class APIHandler:
             st.write(
                 "Within the OpenAI API token limit after reducing documents and chat history. Running LLM..."
             )
-            return qa_llm.run(
+            return self.qa_llm.run(
                 {
                     "context": relevant_docs,
                     "human_input": query,
@@ -419,8 +433,10 @@ class APIHandler:
 
 
 class PromptParser:
-    def __init__(self, config):
+    def __init__(self, config, memory, llm_prompt):
         self.config = config
+        self.memory = memory
+        self.llm_prompt = llm_prompt
 
     @staticmethod
     def reduce_chat_history_tokens(chat_history_dict):
@@ -446,12 +462,11 @@ class PromptParser:
 
         return {"chat_history": "\n".join(combos)}
 
-    @staticmethod
-    def clear_memory():
+    def clear_memory(self):
         """
         Clear the conversation memory.
         """
-        memory.clear()
+        self.memory.clear()
 
     def reduce_doc_tokens(
         self,
@@ -481,7 +496,7 @@ class PromptParser:
             > self.config.model_token_limit_per_query
         ):
             docs.pop(0)  # Remove documents from the start until the token limit is met
-            incoming_prompt = prompt.format(
+            incoming_prompt = self.llm_prompt.format(
                 human_input=user_query,
                 context=docs,
                 chat_history=reduced_chat_history["chat_history"],
@@ -491,13 +506,16 @@ class PromptParser:
 
 
 class DocumentParser:
-    @staticmethod
-    def get_search_query(sources: list) -> list:
+    def __init__(self, search):
+        self.search = search
+
+    def get_search_query(self, query, sources: list) -> list:
         """
         Generate search queries based on a list of sources.
 
         Args:
             sources (list): A list of sources to generate search queries for.
+            query (string): the query sent through the chatbot from the user
 
         Returns:
             list: A list of generated search queries.
@@ -514,7 +532,8 @@ class DocumentParser:
                     search_list.append("TortoiseGitMerge-Manual")
 
         url_list = [
-            DocumentParser.parse_urls(search.run(f"{link}")) for link in search_list
+            DocumentParser.parse_urls(self.search.run(f"{link} {query}"))
+            for link in search_list
         ]
 
         for url in url_list:
@@ -550,7 +569,50 @@ class TokenLimitExceededException(Exception):
         super().__init__(self.message)
 
 
-class chatMessenger:
+class GitBuddyChatBot:
+    def __init__(self, config, api_handler, doc_retriever, doc_parser):
+        self.config = config
+        self.api_handler = api_handler
+        self.doc_retriever = doc_retriever
+        self.doc_parser = doc_parser
+
+    def get_improved_answer(self, query):
+        try:
+            st.write("Retrieving relevant documents from Pinecone....")
+            relevant_docs = self.doc_retriever.get_relevant_documents(query)
+        except Exception as e:
+            return (
+                "Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
+                e,
+            )
+        try:
+            st.write("Extracting sources from documents...")
+            sources = [doc.metadata["source"] for doc in relevant_docs]
+            st.write("Finding related webpages...")
+            links = self.doc_parser.get_search_query(query, sources)
+        except Exception as e:
+            return (
+                "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
+                e,
+            )
+        try:
+            url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
+            clean_url_list = [element for element in links if element != url_to_remove]
+        except Exception as e:
+            return (
+                "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
+                e,
+            )
+        try:
+            st.write("Verifying we are within API limitations...")
+            return self.api_handler.make_request_with_retry(
+                lambda: self.api_handler.verify_api_limits(
+                    query, relevant_docs, clean_url_list
+                )
+            )
+        except Exception as e:
+            return "Error occurred while generating an answer with LLMChain: ", e
+
     @staticmethod
     def set_chat_messages(chat_response):
         """
@@ -564,45 +626,3 @@ class chatMessenger:
             "content": chat_response,
         }
         st.session_state.messages.append(message)
-
-
-def get_improved_answer(query):
-    try:
-        st.write("Retrieving relevant documents from Pinecone....")
-        relevant_docs = retriever.get_relevant_documents(query)
-    except Exception as e:
-        return (
-            "Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
-            e,
-        )
-    try:
-        st.write("Extracting sources from documents...")
-        sources = [doc.metadata["source"] for doc in relevant_docs]
-        st.write("Finding related webpages...")
-        links = DocumentParser.get_search_query(sources)
-    except Exception as e:
-        return (
-            "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
-            e,
-        )
-    try:
-        url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
-        clean_url_list = [element for element in links if element != url_to_remove]
-    except Exception as e:
-        return (
-            "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub. Additional Error Information: ",
-            e,
-        )
-    try:
-        st.write("Verifying we are within API limitations...")
-        return api_handler.make_request_with_retry(
-            lambda: api_handler.verify_api_limits(query, relevant_docs, clean_url_list)
-        )
-    except Exception as e:
-        return "Error occurred while generating an answer with LLMChain: ", e
-
-
-# Initialize chatbot components
-config = Config()
-api_handler = APIHandler(config)
-(prompt, index, qa_llm, search, memory, retriever) = api_handler.initialize_components()
