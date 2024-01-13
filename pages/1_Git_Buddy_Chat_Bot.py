@@ -1,7 +1,7 @@
 import streamlit as st
 from utilities.utils import (
     Config,
-    componentInitializer,
+    ComponentInitializer,
     APIHandler,
     DocumentParser,
     GitBuddyChatBot,
@@ -13,16 +13,24 @@ st.set_page_config(page_title="Git Buddy")
 
 st.title("Git Buddy")
 
+
 # Initialize chatbot components
-config = Config()
-all_components = componentInitializer(config)
+@st.cache_resource
+def set_up_components():
+    config = Config()
+    all_components = ComponentInitializer(config)
 
-(prompt, qa_llm, search, memory, retriever) = all_components.initialize_components()
-prompt_parser = PromptParser(config, memory, prompt)
+    (prompt, qa_llm, search, memory, retriever) = all_components.initialize_components()
+    prompt_parser = PromptParser(config, memory, prompt)
 
-api_handler = APIHandler(config, prompt_parser, prompt, memory, qa_llm)
-doc_parser = DocumentParser(search)
-git_buddy = GitBuddyChatBot(config, api_handler, retriever, doc_parser)
+    api_handler = APIHandler(config, prompt_parser, prompt, memory, qa_llm)
+    doc_parser = DocumentParser(search)
+    git_buddy = GitBuddyChatBot(config, api_handler, retriever, doc_parser)
+
+    return prompt_parser, git_buddy
+
+
+prompt_parser, git_buddy = set_up_components()
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():

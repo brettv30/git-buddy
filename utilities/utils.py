@@ -7,14 +7,14 @@ import streamlit as st
 from openai import RateLimitError
 from langchain.chains import LLMChain
 from bs4 import BeautifulSoup as Soup
-from langchain_community.vectorstores import Pinecone
-from langchain_community.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.docstore.document import Document
-from langchain_community.tools import DuckDuckGoSearchResults
-from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.vectorstores import Pinecone
+from langchain_community.chat_models import ChatOpenAI
 from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_community.tools import DuckDuckGoSearchResults
 from langchain.retrievers import ContextualCompressionRetriever
+from langchain_community.document_loaders import DirectoryLoader
 from langchain.retrievers.document_compressors import CohereRerank
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.document_loaders.recursive_url_loader import RecursiveUrlLoader
@@ -243,7 +243,7 @@ class DocumentManager:
         return text_splitter.split_documents(documents)
 
 
-class componentInitializer:
+class ComponentInitializer:
     def __init__(
         self,
         config,
@@ -254,31 +254,30 @@ class componentInitializer:
         self.doc_memory = memory
         self.temperature = temperature
 
-    @st.cache_resource
-    def initialize_components(_self):
+    def initialize_components(self):
         """
         Initialize components for Pinecone and LangChain including embeddings, index, retriever, etc.
 
         Returns:
             tuple: A tuple containing initialized components such as prompt, index, QA LLM, search, memory, and compression retriever.
         """
-        pinecone.init(api_key=_self.config.pinecone_api_key, environment="gcp-starter")
-        embeddings = OpenAIEmbeddings(model=_self.config.embeddings_model)
-        index = Pinecone.from_existing_index(_self.config.index_name, embeddings)
+        pinecone.init(api_key=self.config.pinecone_api_key, environment="gcp-starter")
+        embeddings = OpenAIEmbeddings(model=self.config.embeddings_model)
+        index = Pinecone.from_existing_index(self.config.index_name, embeddings)
         retriever = index.as_retriever(
-            search_type="mmr", search_kwargs={"k": _self.config.retrieved_documents}
+            search_type="mmr", search_kwargs={"k": self.config.retrieved_documents}
         )
         llm = ChatOpenAI(
-            model_name=_self.config.model_name, temperature=_self.temperature
+            model_name=self.config.model_name, temperature=self.temperature
         )
         memory = ConversationBufferWindowMemory(
             memory_key="chat_history",
             input_key="human_input",
-            k=_self.doc_memory,
+            k=self.doc_memory,
         )
         prompt = PromptTemplate(
             input_variables=["chat_history", "context", "human_input", "url_sources"],
-            template=_self.config.prompt_template,
+            template=self.config.prompt_template,
         )
         qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
         search = DuckDuckGoSearchResults()
@@ -433,10 +432,10 @@ class APIHandler:
                         "url_sources": clean_url_list,
                     }
                 )
-        except Exception as e:
+        except Exception:
             st.write("Couldn't fall under the OpenAI API token limit...")
             return TokenLimitExceededException(
-                "Final prompt still exceeds 4097 tokens. Please ask your question again."
+                "Final prompt still exceeds 4097 tokens. Please ask your question again with less words."
             )
 
 
@@ -465,7 +464,7 @@ class PromptParser:
         # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
         combos = ["".join(match) for match in matches]
 
-        while len(combos) > 2:
+        while len(combos) > 1:
             combos.pop(0)
 
         return {"chat_history": "\n".join(combos)}
@@ -564,6 +563,64 @@ class DocumentParser:
         return re.findall(pattern, search_results)
 
 
+class GitBuddyChatBot:
+    def __init__(self, config, api_handler, doc_retriever, doc_parser):
+        self.config = config
+        self.api_handler = api_handler
+        self.doc_retriever = doc_retriever
+        self.doc_parser = doc_parser
+
+    def get_improved_answer(self, query):
+        try:
+            st.write("Retrieving relevant documents from Pinecone....")
+            relevant_docs = self.doc_retriever.get_relevant_documents(query)
+        except Exception:
+            return DocumentRetrievalException(
+                "Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub."
+            )
+        try:
+            st.write("Extracting sources from documents...")
+            sources = [doc.metadata["source"] for doc in relevant_docs]
+            st.write("Finding related webpages...")
+            links = self.doc_parser.get_search_query(query, sources)
+        except Exception:
+            return SourceExtractionException(
+                "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub."
+            )
+        try:
+            url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
+            clean_url_list = [element for element in links if element != url_to_remove]
+        except Exception:
+            return URLCleaningException(
+                "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub."
+            )
+        try:
+            st.write("Verifying we are within API limitations...")
+            return self.api_handler.make_request_with_retry(
+                lambda: self.api_handler.verify_api_limits(
+                    query, relevant_docs, clean_url_list
+                )
+            )
+        except Exception as e:
+            return LLMChainException(
+                f"Error occurred while generating an answer with LLMChain. Please try query again. Additional error information: {e}"
+            )
+
+    @staticmethod
+    def set_chat_messages(chat_response):
+        """
+        Append a new chat message to the session's message list.
+
+        Args:
+            chat_response (str): The chat response to append.
+        """
+        message = {
+            "role": "assistant",
+            "content": chat_response,
+        }
+        st.session_state.messages.append(message)
+
+
 class TokenLimitExceededException(Exception):
     """
     Exception raised when the token limit is exceeded.
@@ -607,61 +664,3 @@ class LLMChainException(Exception):
 
     def __init__(self, message):
         super().__init__(message)
-
-
-class GitBuddyChatBot:
-    def __init__(self, config, api_handler, doc_retriever, doc_parser):
-        self.config = config
-        self.api_handler = api_handler
-        self.doc_retriever = doc_retriever
-        self.doc_parser = doc_parser
-
-    def get_improved_answer(self, query):
-        try:
-            st.write("Retrieving relevant documents from Pinecone....")
-            relevant_docs = self.doc_retriever.get_relevant_documents(query)
-        except Exception as e:
-            return DocumentRetrievalException(
-                f"Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub. Additional Error Information: {e}"
-            )
-        try:
-            st.write("Extracting sources from documents...")
-            sources = [doc.metadata["source"] for doc in relevant_docs]
-            st.write("Finding related webpages...")
-            links = self.doc_parser.get_search_query(query, sources)
-        except Exception as e:
-            return SourceExtractionException(
-                f"Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub. Additional Error Information: {e}"
-            )
-        try:
-            url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
-            clean_url_list = [element for element in links if element != url_to_remove]
-        except Exception as e:
-            return URLCleaningException(
-                f"Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub. Additional Error Information: {e}"
-            )
-        try:
-            st.write("Verifying we are within API limitations...")
-            return self.api_handler.make_request_with_retry(
-                lambda: self.api_handler.verify_api_limits(
-                    query, relevant_docs, clean_url_list
-                )
-            )
-        except Exception as e:
-            return LLMChainException(
-                f"Error occurred while generating an answer with LLMChain: {e}"
-            )
-
-    @staticmethod
-    def set_chat_messages(chat_response):
-        """
-        Append a new chat message to the session's message list.
-
-        Args:
-            chat_response (str): The chat response to append.
-        """
-        message = {
-            "role": "assistant",
-            "content": chat_response,
-        }
-        st.session_state.messages.append(message)
