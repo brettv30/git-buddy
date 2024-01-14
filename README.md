@@ -1,9 +1,10 @@
 # Git Buddy 🤖
 
-[![Streamlit](https://img.shields.io/badge/-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![OpenAI](https://img.shields.io/badge/-OpenAI-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
 [![Pinecone](https://img.shields.io/badge/-Pinecone-0000ff?style=flat-square&logo=pinecone&logoColor=white)](https://www.pinecone.io)
+[![Cohere](https://img.shields.io/badge/Cohere-80006b?style=flat-square&logo=cohere&logoColor=white)](https://cohere.com/)
+[![OpenAI](https://img.shields.io/badge/-OpenAI-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com/)
 [![Langchain](https://img.shields.io/badge/-Langchain-gray?style=flat-square)](https://www.langchain.com/)
+[![Streamlit](https://img.shields.io/badge/-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://git-buddy.streamlit.app/)
 
@@ -28,8 +29,6 @@ https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6b
 - **Prompting Methodology**: Adopts few-shot prompting, conversational memory, and additional document context for robust, efficient, and accurate responses.
 - **Conversational Memory**: Git Buddy retains knowledge of the three most recent messages, ensuring relevant and contextual interactions while excluding older chat history.
 - **Temperature Setting**: `GPT-3.5-Turbo` operates at a temperature setting of 0.5, balancing creativity and coherence in responses.
-
-
 
 ## Additional Resources 🔍
 
