@@ -594,6 +594,7 @@ class GitBuddyChatBot:
                 "https://playrusvulkan.org/tortoise-git-quick-guide",
                 "data\\TortoiseGit-Manual.pdf",
                 "data\\TortoiseGitMerge-Manual.pdf",
+                "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
             ]  # URL with known issues
             interim_url_list = [
                 element for element in links if element not in urls_to_remove
