@@ -466,7 +466,7 @@ class PromptParser:
         # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
         combos = ["".join(match) for match in matches]
 
-        while len(combos) > 1:
+        while len(combos) > 2:
             combos.pop(0)
 
         return {"chat_history": "\n".join(combos)}
@@ -541,7 +541,7 @@ class DocumentParser:
                     search_list.append("TortoiseGitMerge-Manual")
 
         url_list = [
-            DocumentParser.parse_urls(self.search.run(f"{link} {query}"))
+            DocumentParser.parse_urls(self.search.run(f"{query} {link}"))
             for link in search_list
         ]
 
