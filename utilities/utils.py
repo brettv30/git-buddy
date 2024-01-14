@@ -244,6 +244,16 @@ class DocumentManager:
 
 
 class ComponentInitializer:
+    """
+    Initializer class used to initialize all Pinecone, Cohere, Langchain, and OpenAI Components
+
+    Attributes:
+        config (Config): Configuration settings for the component initializer.
+        memory (int): Maximum number of Human/AI interactions retained in model memory
+        top_docs (int): Maximum number of documents retained after document reranking
+        temperature (float): Number indicating the level of predictability as it pertains to model output
+    """
+
     def __init__(
         self,
         config,
@@ -299,6 +309,18 @@ class ComponentInitializer:
 
 
 class APIHandler:
+    """
+    API Handler class used to handle all API Rate Limit Errors
+
+    Attributes:
+        config (Config): Configuration settings for the API Handler
+        prompt_parser (PromptParser): Prompt Parser methods used to handle token limitations
+        llm_prompt (str): Prompt passed into the Large Language Model
+        chat_memory (dict): Dictionary containing the last 4 Human/AI interactions in chat_history
+        qa_llm (ChatOpenAI): OpenAI LLM model instance
+        max_retries (int): Maximum number of retries before the application returns an error
+    """
+
     def __init__(
         self, config, prompt_parser, llm_prompt, chat_memory, qa_llm, max_retries=5
     ):
@@ -442,6 +464,15 @@ class APIHandler:
 
 
 class PromptParser:
+    """
+    Prompt parsing class used to modify the LLM prompt if errors are hit
+
+    Attributes:
+        config (Config): Configuration settings for the prompt parser
+        llm_prompt (str): Prompt passed into the Large Language Model
+        memory (dict): Dictionary containing the last 4 Human/AI interactions in chat_history
+    """
+
     def __init__(self, config, memory, llm_prompt):
         self.config = config
         self.memory = memory
@@ -515,6 +546,13 @@ class PromptParser:
 
 
 class DocumentParser:
+    """
+    Document parsing class used to parse document sources and search for supplemental links
+
+    Attributes:
+        search (DuckDuckGoSearchResults): Search tool used to find supplemental links for TortoiseGit documents
+    """
+
     def __init__(self, search):
         self.search = search
 
@@ -566,6 +604,16 @@ class DocumentParser:
 
 
 class GitBuddyChatBot:
+    """
+    Git Buddy class used to return LLM results to the streamlit app
+
+    Attributes:
+        config (Config): Configuration settings for the chat bot
+        api_handler (APIHandler): API Rate Limit handling for the LLM
+        doc_retriever (ContextualCompressionRetriever): Retriever used to find and rerank Pinecone documents
+        doc_parser (DocumentParser): Parser used to extract sources from documents
+    """
+
     def __init__(self, config, api_handler, doc_retriever, doc_parser):
         self.config = config
         self.api_handler = api_handler
