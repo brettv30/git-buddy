@@ -44,11 +44,11 @@ class Config:
         self.pinecone_api_key = st.secrets["PINECONE_API_KEY"]
         self.cohere_api_key = st.secrets["COHERE_API_KEY"]
         self.model_request_limit_per_minute = 500
-        self.model_token_limit_per_query = 4097
+        self.model_token_limit_per_query = 16000
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
-        self.model_name = "gpt-3.5-turbo"
+        self.model_name = "gpt-3.5-turbo-1106"
         self.retrieved_documents = 100  # Can vary for different retrieval methods
         self.prompt_template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. 
@@ -247,11 +247,13 @@ class ComponentInitializer:
     def __init__(
         self,
         config,
-        memory=5,
+        memory=4,
+        top_docs=5,
         temperature=0.5,
     ):
         self.config = config
         self.doc_memory = memory
+        self.top_docs = top_docs
         self.temperature = temperature
 
     def initialize_components(self):
@@ -282,7 +284,7 @@ class ComponentInitializer:
         qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
         search = DuckDuckGoSearchResults()
 
-        compressor = CohereRerank()
+        compressor = CohereRerank(top_n=self.top_docs)
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor, base_retriever=retriever
         )
