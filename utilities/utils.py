@@ -591,7 +591,10 @@ class GitBuddyChatBot:
             )
         try:
             url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
-            clean_url_list = [element for element in links if element != url_to_remove]
+            interim_url_list = [
+                element for element in links if element != url_to_remove
+            ]
+            clean_url_list = list(set(interim_url_list))
         except Exception:
             return URLCleaningException(
                 "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub."
