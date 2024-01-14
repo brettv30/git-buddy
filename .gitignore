@@ -2,6 +2,8 @@ __pycache__/
 
 # virtual environments
 gitbuddy/
+.scrape/
+.venv/
 
 # testing 
 .pytest_cache/

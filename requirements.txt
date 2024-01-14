@@ -1,7 +1,9 @@
-langchain==0.0.349
+langchain>=0.1
 pinecone_client==2.2.4
 python-dotenv==1.0.0
 streamlit==1.28.2
 tiktoken==0.5.1
+cohere
 openai
 duckduckgo-search
+bs4

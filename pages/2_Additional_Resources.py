@@ -25,8 +25,8 @@ with tab1:
 with tab2:
     st.markdown("**Git Buddy uses the following architecture:**")
     st.image(
-        "./images/High-Level-RAG-Diagram.png",
-        caption="High Level Git-Buddy Architecture",
+        "./images/High-Level-Git-Buddy-Diagram.png",
+        caption="High level diagram of Git-Buddy model architecture",
     )
 
 with tab3:
