@@ -317,7 +317,7 @@ class APIHandler:
         prompt_parser (PromptParser): Prompt Parser methods used to handle token limitations
         llm_prompt (str): Prompt passed into the Large Language Model
         chat_memory (dict): Dictionary containing the last 4 Human/AI interactions in chat_history
-        qa_llm (ChatOpenAI): OpenAI LLM model instance
+        qa_llm (LLMChain): OpenAI LLM model instance
         max_retries (int): Maximum number of retries before the application returns an error
     """
 
@@ -459,7 +459,7 @@ class APIHandler:
         except Exception:
             st.write("Couldn't fall under the OpenAI API token limit...")
             return TokenLimitExceededException(
-                "Final prompt still exceeds 4097 tokens. Please ask your question again with less words."
+                "Final prompt still exceeds 16,000 tokens. Please ask your question again with less words."
             )
 
 
@@ -643,7 +643,7 @@ class GitBuddyChatBot:
                 "data\\TortoiseGit-Manual.pdf",
                 "data\\TortoiseGitMerge-Manual.pdf",
                 "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
-            ]  # URL with known issues
+            ]  # URLs with known issues
             interim_url_list = [
                 element for element in links if element not in urls_to_remove
             ]
