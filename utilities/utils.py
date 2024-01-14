@@ -590,9 +590,13 @@ class GitBuddyChatBot:
                 "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub."
             )
         try:
-            url_to_remove = "https://playrusvulkan.org/tortoise-git-quick-guide"  # URL with known issues
+            urls_to_remove = [
+                "https://playrusvulkan.org/tortoise-git-quick-guide",
+                "data\\TortoiseGit-Manual.pdf",
+                "data\\TortoiseGitMerge-Manual.pdf",
+            ]  # URL with known issues
             interim_url_list = [
-                element for element in links if element != url_to_remove
+                element for element in links if element not in urls_to_remove
             ]
             clean_url_list = list(set(interim_url_list))
         except Exception:
