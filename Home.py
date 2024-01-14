@@ -24,6 +24,7 @@ Git Buddy utilizes the following tools:
 
 - [Langchain](https://www.langchain.com) to orchestrate
 - [Pinecone](https://www.pinecone.io) to store document embeddings
+- [Cohere](https://cohere.com) to rerank retrieved documents
 - [OpenAI](https://openai.com) to supply the LLM (GPT-3.5-Turbo)
 - [Streamlit](https://streamlit.io) to deliver the application
 
