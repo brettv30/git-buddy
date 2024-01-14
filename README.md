@@ -9,7 +9,7 @@
 
 ## About Git Buddy 📖
 
-Think of Git Buddy as a friendly, understanding, and helpful version control expert who never runs out of patience. Git Buddy offers streamlined assistance with learning about Git, GitHub, and TortoiseGit, designed for users at all levels of expertise. It combines the ease of a chatbot interface with advanced Large Language Model (LLM) and Retrieval-Augmented Generation (RAG) technology to enhance your version control system learning experience. By coupling GPT-3.5-Turbo with few-shot prompting and RAG inside a streamlit application Git Buddy is prepared to answer any and all questions related to Git, GitHub, and TortoiseGit. 
+Think of Git Buddy as a friendly, understanding, and helpful version control expert who never runs out of patience. Git Buddy offers streamlined assistance with learning about Git, GitHub, and TortoiseGit, designed for users at all levels of expertise. It combines the ease of a chatbot interface with advanced Large Language Model (LLM) and Retrieval-Augmented Generation (RAG) technology to enhance your version control system learning experience. By coupling GPT-3.5-Turbo (16K context window) with few-shot prompting and RAG inside a streamlit application Git Buddy is prepared to answer any and all questions related to Git, GitHub, and TortoiseGit. 
 
 https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6bcf37824440
 
