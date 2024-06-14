@@ -1,6 +1,7 @@
-langchain
-langchain-community
-langchain-openai
+langchain==0.2
+langchain-community==0.0.11
+langchain-openai==0.0.2
+langchain-core==0.1.23
 pinecone_client==2.2.4
 python-dotenv==1.0.0
 streamlit==1.28.2
