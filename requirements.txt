@@ -1,4 +1,5 @@
 langchain>=0.1
+langchain-community
 pinecone_client==2.2.4
 python-dotenv==1.0.0
 streamlit==1.28.2
