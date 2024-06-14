@@ -10,8 +10,8 @@ from bs4 import BeautifulSoup as Soup
 from langchain.prompts import PromptTemplate
 from langchain.docstore.document import Document
 from langchain_community.vectorstores import Pinecone
-from langchain_community.chat_models import ChatOpenAI
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain_community.document_loaders import DirectoryLoader
