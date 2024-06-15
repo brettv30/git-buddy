@@ -46,7 +46,7 @@ class Config:
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
-        self.model_name = "gpt-3.5-turbo-1106"
+        self.model_name = "gpt-3.5-turbo"
         self.retrieved_documents = 100  # Can vary for different retrieval methods
         self.prompt_template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
 You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. Never include the example questions and answers from this prompt in any response.
