@@ -1,8 +1,8 @@
 import time
-import pinecone
-from langchain_community.vectorstores import Pinecone
-from langchain_openai import OpenAIEmbeddings
+from pinecone import Pinecone
 from utils import DocumentManager, Config
+from langchain_openai import OpenAIEmbeddings
+from langchain_pinecone import PineconeVectorStore
 
 # Initialize the configuration componenets
 config = Config()
@@ -11,55 +11,52 @@ doc_manager = DocumentManager(config)
 openai_api_key_env = config.openai_api_key
 pinecone_api_key_env = config.pinecone_api_key
 
-# List of URLs we want to iterate through and add to documentation
-url_list = [
-    "https://docs.github.com/en",
-    "https://git-scm.com/book/en/v2",
-]
+# Configure Client
+pc = Pinecone(api_key=pinecone_api_key_env)
 
-# Load in knowledge base
-docs = [doc_manager.load_docs(url) for url in url_list]
+# Only run if the index cannot be found
+if config.index_name not in pc.list_indexes().names():
+    # Create a new index
+    pc.create_index(
+        name=config.index_name,
+        metric="dotproduct",  # https://www.pinecone.io/learn/vector-similarity/
+        dimension=1536,  # 1536 dim of text-embedding-ada-002
+    )
 
-pdfs = doc_manager.load_pdfs()
+    # wait for index to be initialized
+    while not pc.describe_index(config.index_name).status["ready"]:
+        time.sleep(1)
 
-# Flatten the list of lists into just a single list
-flattened_list = [element for sublist in docs for element in sublist]
+    # Grab embeddings model
+    embeddings = OpenAIEmbeddings(model=config.embeddings_model)
 
-full_list = flattened_list + pdfs
+    # List of URLs we want to iterate through and add to documentation
+    url_list = [
+        "https://docs.github.com/en",
+        "https://git-scm.com/book/en/v2",
+    ]
 
-# Clean the documents/pdfs
-transformed_doc = doc_manager.clean_docs(full_list)
+    # Load in knowledge base
+    docs = [doc_manager.load_docs(url) for url in url_list]
 
-# Create docs to pass to langchain
-chunked_documents = doc_manager.split_docs(transformed_doc)
+    pdfs = doc_manager.load_pdfs()
 
-# Initialize the Pinecone Vector Database
-pinecone.init(environment="gcp-starter")  # next to api key in console
+    # Flatten the list of lists into just a single list
+    flattened_list = [element for sublist in docs for element in sublist]
 
-if config.index_name in pinecone.list_indexes():
-    pinecone.delete_index(config.index_name)
+    full_list = flattened_list + pdfs
 
-# we create a new index
-pinecone.create_index(
-    name=config.index_name,
-    metric="dotproduct",  # https://www.pinecone.io/learn/vector-similarity/
-    dimension=1536,  # 1536 dim of text-embedding-ada-002
-)
+    # Clean the documents/pdfs
+    transformed_doc = doc_manager.clean_docs(full_list)
 
-# wait for index to be initialized
-while not pinecone.describe_index(config.index_name).status["ready"]:
-    time.sleep(1)
+    # Create docs to pass to Pinecone
+    chunked_documents = doc_manager.split_docs(transformed_doc)
 
-# Initialize the Pinecone Vector Database
-pinecone.init(environment="gcp-starter")  # next to api key in console
+    # Load the embedded documents into your Pinecone Vector DB
+    vectorstore = PineconeVectorStore.from_documents(
+        documents=chunked_documents, embedding=embeddings, index_name=config.index_name
+    )
 
-# if you already have an index, you can load it using the steps below
-embeddings = OpenAIEmbeddings(model=config.embeddings_model)
-
-
-# This loads the embedded documents into your Pinecone Index
-index = Pinecone.from_documents(
-    chunked_documents, embeddings, index_name=config.index_name
-)
-
-print("Index Creation Complete!")
+    print("Index Creation Complete!")
+else:
+    print("Index already exists!")

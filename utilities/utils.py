@@ -2,23 +2,21 @@ import re
 import time
 import random
 import tiktoken
-import pinecone
 import streamlit as st
 from openai import RateLimitError
 from langchain.chains import LLMChain
 from bs4 import BeautifulSoup as Soup
-from langchain.prompts import PromptTemplate
-from langchain.docstore.document import Document
-from langchain_community.vectorstores import Pinecone
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_core.documents import Document
+from langchain_core.prompts import PromptTemplate
+from langchain_pinecone import PineconeVectorStore
+from langchain_community.tools import DuckDuckGoSearchRun
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain_community.document_loaders import DirectoryLoader
-from langchain.retrievers.document_compressors import CohereRerank
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders.recursive_url_loader import RecursiveUrlLoader
+from langchain_cohere import CohereRerank
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
+from langchain_community.document_loaders import RecursiveUrlLoader, DirectoryLoader
 
 
 class Config:
@@ -273,10 +271,11 @@ class ComponentInitializer:
         Returns:
             tuple: A tuple containing initialized components such as prompt, index, QA LLM, search, memory, and compression retriever.
         """
-        pinecone.init(api_key=self.config.pinecone_api_key, environment="gcp-starter")
         embeddings = OpenAIEmbeddings(model=self.config.embeddings_model)
-        index = Pinecone.from_existing_index(self.config.index_name, embeddings)
-        retriever = index.as_retriever(
+        docsearch = PineconeVectorStore.from_existing_index(
+            embedding=embeddings, index_name=self.config.index_name
+        )
+        retriever = docsearch.as_retriever(
             search_type="mmr", search_kwargs={"k": self.config.retrieved_documents}
         )
         llm = ChatOpenAI(
@@ -292,7 +291,7 @@ class ComponentInitializer:
             template=self.config.prompt_template,
         )
         qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
-        search = DuckDuckGoSearchResults()
+        search = DuckDuckGoSearchRun()
 
         compressor = CohereRerank(top_n=self.top_docs)
         compression_retriever = ContextualCompressionRetriever(
@@ -550,7 +549,7 @@ class DocumentParser:
     Document parsing class used to parse document sources and search for supplemental links
 
     Attributes:
-        search (DuckDuckGoSearchResults): Search tool used to find supplemental links for TortoiseGit documents
+        search (DuckDuckGoSearchRun): Search tool used to find supplemental links for TortoiseGit documents
     """
 
     def __init__(self, search):
@@ -568,20 +567,27 @@ class DocumentParser:
             list: A list of generated search queries.
         """
         search_list = []
-        for source in sources:
-            if source == "data\\TortoiseGit-Manual.pdf":
-                sources.remove(source)
-                if source not in search_list:
-                    search_list.append("TortoiseGit-Manual")
-            elif source == "data\\TortoiseGitMerge-Manual.pdf":
-                sources.remove(source)
-                if source not in search_list:
-                    search_list.append("TortoiseGitMerge-Manual")
 
-        url_list = [
-            DocumentParser.parse_urls(self.search.run(f"{query} {link}"))
-            for link in search_list
-        ]
+        if sources:
+            for source in sources:
+                if source == "data\\TortoiseGit-Manual.pdf":
+                    sources.remove(source)
+                    source = "TortoiseGit-Manual"
+                    if source not in search_list:
+                        search_list.append(source)
+                elif source == "data\\TortoiseGitMerge-Manual.pdf":
+                    sources.remove(source)
+                    source = "TortoiseGitMerge-Manual"
+                    if source not in search_list:
+                        search_list.append("TortoiseGitMerge-Manual")
+
+            url_list = [
+                DocumentParser.parse_urls(self.search.run(f"{query} {link}"))
+                for link in search_list
+            ]
+
+        else:
+            url_list = [DocumentParser.parse_urls(self.search.run(query))]
 
         for url in url_list:
             sources.extend(url)
@@ -623,7 +629,7 @@ class GitBuddyChatBot:
     def get_improved_answer(self, query):
         try:
             st.write("Retrieving relevant documents from Pinecone....")
-            relevant_docs = self.doc_retriever.get_relevant_documents(query)
+            relevant_docs = self.doc_retriever.invoke(query)
         except Exception:
             return DocumentRetrievalException(
                 "Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub."
