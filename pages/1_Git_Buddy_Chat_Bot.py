@@ -42,7 +42,9 @@ if "messages" not in st.session_state.keys():
     ]
 
 # Prompt for user input and save to chat history
-if prompt := st.chat_input("What is the difference between Git and GitHub?"):
+if prompt := st.chat_input(
+    "What is the difference between Git and GitHub?", key="prompt"
+):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
 # Display the prior chat messages
@@ -52,6 +54,7 @@ for message in st.session_state.messages:
 
 # If last message is not from assistant, then respond
 if st.session_state.messages[-1]["role"] != "assistant":
+    st.chat_input("", disabled=True)
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             with st.status("Accessing Tools...", expanded=True) as status:
@@ -79,3 +82,4 @@ if st.session_state.messages[-1]["role"] != "assistant":
             else:
                 st.write(chat_response)
                 git_buddy.set_chat_messages(chat_response)
+    st.rerun()
