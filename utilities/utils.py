@@ -579,7 +579,9 @@ class DocumentParser:
                     sources.remove(source)
                     source = "TortoiseGitMerge-Manual"
                     if source not in search_list:
-                        search_list.append("TortoiseGitMerge-Manual")
+                        search_list.append(source)
+                elif source not in search_list:
+                    search_list.append(source)
 
             url_list = [
                 DocumentParser.parse_urls(self.search.run(f"{query} {link}"))
