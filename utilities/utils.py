@@ -21,6 +21,9 @@ from langchain_community.document_loaders import (
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.messages.utils import convert_to_messages
 from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_community.chat_message_histories import (
+    StreamlitChatMessageHistory,
+)
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.chains.combine_documents.base import DOCUMENTS_KEY
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -347,7 +350,7 @@ class ComponentInitializer(Config):
         """
 
         if session_id not in self.store:
-            self.store[session_id] = ChatMessageHistory()
+            self.store[session_id] = StreamlitChatMessageHistory()
 
         print("Length of Chat History: ", len(self.store[session_id].messages))
         if (
