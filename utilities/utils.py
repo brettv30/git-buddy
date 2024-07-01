@@ -1,65 +1,78 @@
 import re
-import time
-import random
-import tiktoken
 import streamlit as st
-from openai import RateLimitError
-from langchain.chains import LLMChain
+from langchain.chains import (
+    create_history_aware_retriever,
+    create_retrieval_chain,
+)
+from langchain_core.prompts import (
+    MessagesPlaceholder,
+    ChatPromptTemplate,
+)
 from bs4 import BeautifulSoup as Soup
 from langchain_openai import ChatOpenAI
+from langchain_cohere import CohereRerank
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
-from langchain_core.prompts import PromptTemplate
 from langchain_pinecone import PineconeVectorStore
+from langchain_community.document_loaders import (
+    RecursiveUrlLoader,
+    DirectoryLoader,
+)
 from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.messages.utils import convert_to_messages
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_community.chat_message_histories import (
+    StreamlitChatMessageHistory,
+)
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain_cohere import CohereRerank
+from langchain.chains.combine_documents.base import DOCUMENTS_KEY
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain_community.document_loaders import RecursiveUrlLoader, DirectoryLoader
+from langchain_community.callbacks.manager import get_openai_callback
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain.chains.combine_documents import create_stuff_documents_chain
 
 
 class Config:
     """
-    Config class to hold configuration settings for the application.
+    Manages the configuration settings for the application, including API keys, model limits, and directory paths.
 
-    Attributes:
-        openai_api_key (str): API key for OpenAI.
-        pinecone_api_key (str): API key for Pinecone.
-        cohere_api_key (str): API key for Cohere.
-        model_request_limit_per_minute (int): Limit for model requests per minute.
-        model_token_limit_per_query (int): Token limit for each query to the model.
-        directory (str): Directory path for storing data.
-        embeddings_model (str): Model used for text embeddings.
-        index_name (str): Name of the Pinecone index.
-        model_name (str): Name of the language model.
-        retrieved_documents (int): Number of documents to retrieve for each query.
-        prompt_template (str): Template for the chatbot prompt.
+    Args:
+        openai_api_key (str): The OpenAI API key.
+        pinecone_api_key (str): The Pinecone API key.
+        cohere_api_key (str): The Cohere API key.
+        directory (str): The directory for storing data.
+        embeddings_model (str): The name of the embeddings model to use.
+        index_name (str): The name of the Pinecone index.
+        model_name (str): The name of the language model to use.
+        retrieved_documents (int): The number of documents to retrieve.
+        prompt_template (str): The template for the prompt used in the RAG (Retrieval Augmented Generation) model.
+        contextualize_q_system_prompt (str): The system prompt for the contextualize_q model.
+        contextualize_q_prompt (ChatPromptTemplate): The prompt template for the contextualize_q model.
+        rag_prompt (ChatPromptTemplate): The prompt template for the RAG model.
+        user_query (str): The current user query.
+        total_tokens (int): The total number of tokens used in the current session.
     """
 
     def __init__(self):
         self.openai_api_key = st.secrets["OPENAI_API_KEY"]
         self.pinecone_api_key = st.secrets["PINECONE_API_KEY"]
         self.cohere_api_key = st.secrets["COHERE_API_KEY"]
-        self.model_request_limit_per_minute = 500
-        self.model_token_limit_per_query = 16000
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
         self.model_name = "gpt-3.5-turbo"
         self.retrieved_documents = 100  # Can vary for different retrieval methods
-        self.prompt_template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. Your responses are geared towards beginners. 
-You should only ever answer questions about Git, GitHub, or TortoiseGit. Never answer any other questions even if you think you know the correct answer. Never include the example questions and answers from this prompt in any response.
-If possible, please provide example code to help the beginner learn Git commands. Never use the sources from the context in an answer, only use the sources from url_sources.
+        self.prompt_template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. 
+Your responses are geared towards beginners. 
+You should only ever answer questions if either the question or the context relates to Git, GitHub, or TortoiseGit. 
+Never include the example questions and answers from this prompt in any response.
+If possible, please provide example code to help the beginner learn Git commands. 
+Never use the sources from the context in an answer, only use the sources from url_sources.
+Use the additional sources as recommendaations to the user at the end of the response.
 
-If a question is ambiguous please refer to the conversation history to see if that helps in answering the question at the end:
-{chat_history}
-
-Use the following pieces of context to answer the question at the end: 
+Use the following pieces of context to answer the question at the end:
 {context}
-
-If there are links in the following sources then you MUST link all of the following sources at the end of your answer to the question. You can just keep the entire link in the output, no need to hyperlink with a different name. Do NOT change the links.
-{url_sources}
 
 Use the following format:
 
@@ -103,13 +116,33 @@ By using branches, you can organize your development efforts and keep your main 
 Additional Sources:
     - [Pro Git Book - Chapter 3: Git Branching](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)
     - [GitHub Docs - About Branches](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-branches)
+"""
+        self.contextualize_q_system_prompt = (
+            "Given a chat history and the latest user question "
+            "which might reference context in the chat history, "
+            "formulate a standalone question which can be understood "
+            "without the chat history. Do NOT answer the question, "
+            "just reformulate it if needed and otherwise return it as is."
+        )
 
-Begin!
-
-Question: {human_input}
-Answer:
-Additional Sources:"""
-        self.encoding = tiktoken.get_encoding("cl100k_base")
+        self.contextualize_q_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", self.contextualize_q_system_prompt),
+                MessagesPlaceholder("chat_history"),
+                ("human", "{input}"),
+            ]
+        )
+        self.rag_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", self.prompt_template),
+                MessagesPlaceholder("chat_history"),
+                MessagesPlaceholder("url_sources"),
+                ("human", "{input}"),
+            ]
+        )
+        self.user_query = ""
+        self.total_tokens = 0
+        self.rand_session_id = ""
 
 
 class DocumentManager:
@@ -241,36 +274,39 @@ class DocumentManager:
         return text_splitter.split_documents(documents)
 
 
-class ComponentInitializer:
+class ComponentInitializer(Config):
     """
-    Initializer class used to initialize all Pinecone, Cohere, Langchain, and OpenAI Components
+    Initializes and manages the components required for the application, including embeddings, index, retriever, and other necessary objects.
 
     Attributes:
-        config (Config): Configuration settings for the component initializer.
-        memory (int): Maximum number of Human/AI interactions retained in model memory
-        top_docs (int): Maximum number of documents retained after document reranking
-        temperature (float): Number indicating the level of predictability as it pertains to model output
+        config (Config): The configuration object containing settings for the application.
+        top_docs (int): The number of top documents to retrieve.
+        temperature (float): The temperature parameter for the language model.
+        store (dict): A dictionary to store session history for each user.
+
+    Methods:
+        initialize_components() -> tuple:
+            Initializes the components required for the application, such as embeddings, index, retriever, and language model. Returns a tuple containing the initialized components.
+        get_session_history(session_id) -> BaseChatMessageHistory:
+            Retrieves the chat message history for the given session ID. If the session ID is not found in the store, a new ChatMessageHistory object is created and stored.
     """
 
-    def __init__(
-        self,
-        config,
-        memory=4,
-        top_docs=5,
-        temperature=0.5,
-    ):
+    def __init__(self, config):
         self.config = config
-        self.doc_memory = memory
-        self.top_docs = top_docs
-        self.temperature = temperature
+        self.top_docs = 5
+        self.temperature = 0.5
+        self.store = {}
 
     def initialize_components(self):
         """
-        Initialize components for Pinecone and LangChain including embeddings, index, retriever, etc.
+        Initializes and returns the necessary components for the application, including embeddings, index, retriever, compressor, and language model.
 
         Returns:
-            tuple: A tuple containing initialized components such as prompt, index, QA LLM, search, memory, and compression retriever.
+            tuple: A tuple containing the initialized components:
+                - conversational_rag_chain: A RunnableWithMessageHistory object that combines a retrieval-augmented generation (RAG) chain with message history.
+                - history_aware_retriever: A ContextualCompressionRetriever object that retrieves and compresses documents based on the chat history.
         """
+
         embeddings = OpenAIEmbeddings(model=self.config.embeddings_model)
         docsearch = PineconeVectorStore.from_existing_index(
             embedding=embeddings, index_name=self.config.index_name
@@ -278,323 +314,180 @@ class ComponentInitializer:
         retriever = docsearch.as_retriever(
             search_type="mmr", search_kwargs={"k": self.config.retrieved_documents}
         )
-        llm = ChatOpenAI(
-            model_name=self.config.model_name, temperature=self.temperature
-        )
-        memory = ConversationBufferWindowMemory(
-            memory_key="chat_history",
-            input_key="human_input",
-            k=self.doc_memory,
-        )
-        prompt = PromptTemplate(
-            input_variables=["chat_history", "context", "human_input", "url_sources"],
-            template=self.config.prompt_template,
-        )
-        qa_llm = LLMChain(llm=llm, prompt=prompt, memory=memory, verbose=True)
-        search = DuckDuckGoSearchRun()
-
         compressor = CohereRerank(top_n=self.top_docs)
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor, base_retriever=retriever
         )
-
-        return (
-            prompt,
-            qa_llm,
-            search,
-            memory,
-            compression_retriever,
+        llm = ChatOpenAI(
+            model_name=self.config.model_name, temperature=self.temperature
         )
 
+        history_aware_retriever = create_history_aware_retriever(
+            llm, compression_retriever, self.config.contextualize_q_prompt
+        )
 
-class APIHandler:
+        qa_chain = create_stuff_documents_chain(llm, self.config.rag_prompt)
+        rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
+
+        conversational_rag_chain = RunnableWithMessageHistory(
+            rag_chain,
+            self.get_session_history,
+            input_messages_key="input",
+            history_messages_key="chat_history",
+            output_messages_key="answer",
+        )
+
+        return conversational_rag_chain, history_aware_retriever
+
+    def get_session_history(self, session_id) -> BaseChatMessageHistory:
+        """
+        Retrieves and manages the chat history for a given session.
+
+        Args:
+            session_id (str): The unique identifier for the current session.
+
+        Returns:
+            BaseChatMessageHistory: The chat message history for the given session.
+        """
+
+        if Config.rand_session_id not in self.store:
+            self.store[Config.rand_session_id] = StreamlitChatMessageHistory()
+
+        print(
+            "Length of Chat History: ", len(self.store[Config.rand_session_id].messages)
+        )
+        if (
+            len(self.store[Config.rand_session_id].messages) > 16
+        ):  # Only keep the 7 most recent chat history messages at any time
+            self.store[Config.rand_session_id].messages = self.store[
+                Config.rand_session_id
+            ].messages[-14:]
+
+        return self.store[Config.rand_session_id]
+
+
+class APIHandler(Config):
     """
-    API Handler class used to handle all API Rate Limit Errors
+    The `APIHandler` class is responsible for handling API requests and managing the retrieval and processing of additional sources based on a user's query.
 
-    Attributes:
-        config (Config): Configuration settings for the API Handler
-        prompt_parser (PromptParser): Prompt Parser methods used to handle token limitations
-        llm_prompt (str): Prompt passed into the Large Language Model
-        chat_memory (dict): Dictionary containing the last 4 Human/AI interactions in chat_history
-        qa_llm (LLMChain): OpenAI LLM model instance
-        max_retries (int): Maximum number of retries before the application returns an error
+    The class has the following key responsibilities:
+
+    1. Initializes the necessary components and configurations for the API handling process.
+    2. Provides a method `find_additional_sources` to generate search queries based on a list of sources and retrieve additional contextual documents.
+    3. Implements a `make_request_with_retry` method to attempt making an API call with a retry mechanism in case of rate limit errors.
+
+    The class uses various helper methods and exceptions to handle different aspects of the API handling process, such as URL cleaning, source extraction, and error handling.
     """
 
-    def __init__(
-        self, config, prompt_parser, llm_prompt, chat_memory, qa_llm, max_retries=5
-    ):
-        self.config = config
-        self.prompt_parser = prompt_parser
-        self.llm_prompt = llm_prompt
-        self.chat_memory = chat_memory
-        self.qa_llm = qa_llm
+    def __init__(self, chain, retriever_chain, max_retries=5):
+        self.conf_obj = Config()
+        self.comp_obj = ComponentInitializer(self.conf_obj)
+        self.search = DuckDuckGoSearchRun()
         self.max_retries = max_retries
-
-    def make_request_with_retry(self, api_call):
-        """
-        Attempt to make an API call with a retry mechanism on RateLimitError.
-
-        Args:
-            api_call (callable): The API call function to be executed.
-            max_retries (int): Maximum number of retries.
-
-        Returns:
-            Any: The result of the API call if successful.
-
-        Raises:
-            Exception: If the rate limit is still hit after the maximum number of retries.
-        """
-        for i in range(self.max_retries):
-            try:
-                return api_call()
-            except RateLimitError:
-                st.write(
-                    "Rate Limit was hit. Waiting a little while before trying again..."
-                )
-                wait_time = (2**i) + random.random()
-                time.sleep(wait_time)
-        raise APIRequestException(
-            "OpenAI API Request Rate Limit was reached. Please wait a few minutes before trying again."
-        )
-
-    def verify_api_limits(self, query, relevant_docs, clean_url_list):
-        """
-        Verify if the generated prompt is within the token limit of the OpenAI API and run the LLM chain.
-
-        Args:
-            query (str): The user query to process.
-            relevant_docs (list): List of relevant documents to include in the prompt.
-            clean_url_list (list): List of cleaned URLs to include in the prompt.
-
-        Returns:
-            Any: The result from the LLM chain if the prompt is within the token limit.
-
-        Raises:
-            TokenLimitExceededException: If the final prompt exceeds the token limit.
-        """
-        try:
-            chat_history_dict = self.chat_memory.load_memory_variables({})
-            formatted_prompt = self.llm_prompt.format(
-                human_input=query,
-                context=relevant_docs,
-                chat_history=chat_history_dict["chat_history"],
-                url_sources=clean_url_list,
-            )
-
-            if (
-                len(self.config.encoding.encode(formatted_prompt))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write("Within the OpenAI API token limit. Running LLM...")
-                return self.qa_llm.run(
-                    {
-                        "context": relevant_docs,
-                        "human_input": query,
-                        "chat_history": self.chat_memory.load_memory_variables({}),
-                        "url_sources": clean_url_list,
-                    }
-                )
-
-            st.write(
-                "Reached the OpenAI API token limit: Removing interactions from chat history..."
-            )
-            reduced_chat_history_dict = self.prompt_parser.reduce_chat_history_tokens(
-                chat_history_dict
-            )
-            formatted_prompt_with_reduced_history = self.llm_prompt.format(
-                human_input=query,
-                context=relevant_docs,
-                chat_history=reduced_chat_history_dict["chat_history"],
-                url_sources=clean_url_list,
-            )
-
-            if (
-                len(self.config.encoding.encode(formatted_prompt_with_reduced_history))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write(
-                    "Within the OpenAI API token limit after reducing chat history. Running LLM..."
-                )
-                return self.qa_llm.run(
-                    {
-                        "context": relevant_docs,
-                        "human_input": query,
-                        "chat_history": reduced_chat_history_dict["chat_history"],
-                        "url_sources": clean_url_list,
-                    }
-                )
-
-            st.write(
-                "Still at the OpenAI API token limit: Reducing number of retrieved documents..."
-            )
-            shorter_relevant_docs = self.prompt_parser.reduce_doc_tokens(
-                relevant_docs,
-                formatted_prompt_with_reduced_history,
-                query,
-                reduced_chat_history_dict,
-                clean_url_list,
-            )
-            processed_prompt = self.llm_prompt.format(
-                human_input=query,
-                context=shorter_relevant_docs,
-                chat_history=reduced_chat_history_dict["chat_history"],
-                url_sources=clean_url_list,
-            )
-            if (
-                len(self.config.encoding.encode(processed_prompt))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write(
-                    "Within the OpenAI API token limit after reducing documents and chat history. Running LLM..."
-                )
-                return self.qa_llm.run(
-                    {
-                        "context": relevant_docs,
-                        "human_input": query,
-                        "chat_history": reduced_chat_history_dict["chat_history"],
-                        "url_sources": clean_url_list,
-                    }
-                )
-        except Exception:
-            st.write("Couldn't fall under the OpenAI API token limit...")
-            return TokenLimitExceededException(
-                "Final prompt still exceeds 16,000 tokens. Please ask your question again with less words."
-            )
-
-
-class PromptParser:
-    """
-    Prompt parsing class used to modify the LLM prompt if errors are hit
-
-    Attributes:
-        config (Config): Configuration settings for the prompt parser
-        llm_prompt (str): Prompt passed into the Large Language Model
-        memory (dict): Dictionary containing the last 4 Human/AI interactions in chat_history
-    """
-
-    def __init__(self, config, memory, llm_prompt):
-        self.config = config
-        self.memory = memory
-        self.llm_prompt = llm_prompt
+        self.chain = chain
+        self.retriever_chain = retriever_chain
+        self.total_tokens = 0
 
     @staticmethod
-    def reduce_chat_history_tokens(chat_history_dict):
+    def set_user_query(query):
         """
-        Reduce the token count of chat history by dropping earlier interactions.
+        Sets the user's query for the application.
 
         Args:
-            chat_history_dict (dict): A dictionary containing chat history.
-
-        Returns:
-            dict: A dictionary with reduced chat history.
+            query (str): The user's query to be processed by the application.
         """
-        chat_history = chat_history_dict.get("chat_history", "")
 
-        pattern = r"(Human:.*?)(?=Human:|$)|(AI:.*?)(?=AI:|$)"
-        matches = re.findall(pattern, chat_history, re.DOTALL)
+        Config.user_query = query
 
-        # Each match is a tuple, where one of the elements is empty. We join the tuple to get the full text.
-        combos = ["".join(match) for match in matches]
-
-        while len(combos) > 2:
-            combos.pop(0)
-
-        return {"chat_history": "\n".join(combos)}
-
-    def clear_memory(self):
+    @staticmethod
+    def set_session_id(id):
         """
-        Clear the conversation memory.
-        """
-        self.memory.clear()
-
-    def reduce_doc_tokens(
-        self,
-        docs,
-        incoming_prompt,
-        user_query,
-        reduced_chat_history,
-        url_list,
-    ):
-        """
-        Reduce the number of documents to ensure the total token count is below the token limit.
+        Sets the user's query for the application.
 
         Args:
-            docs (list): List of similar documents.
-            incoming_prompt (str): The current prompt to be sent to the model.
-            user_query (str): The user's query.
-            reduced_chat_history (dict): Reduced chat history.
-            url_list (list): List of URL sources.
-            token_limit (int): The maximum token limit.
-
-        Returns:
-            list: Reduced list of similar documents.
+            query (str): The user's query to be processed by the application.
         """
-        while (
-            len(docs) > 1
-            and len(self.config.encoding.encode(str(incoming_prompt)))
-            > self.config.model_token_limit_per_query
-        ):
-            docs.pop(0)  # Remove documents from the start until the token limit is met
-            incoming_prompt = self.llm_prompt.format(
-                human_input=user_query,
-                context=docs,
-                chat_history=reduced_chat_history["chat_history"],
-                url_sources=url_list,
-            )
-        return docs
 
+        Config.rand_session_id = id
 
-class DocumentParser:
-    """
-    Document parsing class used to parse document sources and search for supplemental links
-
-    Attributes:
-        search (DuckDuckGoSearchRun): Search tool used to find supplemental links for TortoiseGit documents
-    """
-
-    def __init__(self, search):
-        self.search = search
-
-    def get_search_query(self, query, sources: list) -> list:
+    def find_additional_sources(self, query) -> list:
         """
-        Generate search queries based on a list of sources.
+        Retrieves additional contextual documents based on the given query.
 
         Args:
-            sources (list): A list of sources to generate search queries for.
-            query (string): the query sent through the chatbot from the user
+            query (str): The user's query to be used for searching additional sources.
 
         Returns:
-            list: A list of generated search queries.
+            list: A list of cleaned URLs for the additional sources.
         """
+
+        st.write("Retrieving Contextual Documents...")
+        doc_list = self.retriever_chain.invoke({"input": query})
+
+        sources = [doc.metadata["source"] for doc in doc_list]
         search_list = []
 
-        if sources:
-            for source in sources:
-                if source == "data\\TortoiseGit-Manual.pdf":
-                    sources.remove(source)
-                    source = "TortoiseGit-Manual"
-                    if source not in search_list:
+        try:
+            if sources:
+                for source in sources:
+                    if source == "data\\TortoiseGit-Manual.pdf":
+                        sources.remove(source)
+                        source = "TortoiseGit-Manual"
+                        if source not in search_list:
+                            search_list.append(source)
+                    elif source == "data\\TortoiseGitMerge-Manual.pdf":
+                        sources.remove(source)
+                        source = "TortoiseGitMerge-Manual"
+                        if source not in search_list:
+                            search_list.append(source)
+                    elif source not in search_list:
                         search_list.append(source)
-                elif source == "data\\TortoiseGitMerge-Manual.pdf":
-                    sources.remove(source)
-                    source = "TortoiseGitMerge-Manual"
-                    if source not in search_list:
-                        search_list.append(source)
-                elif source not in search_list:
-                    search_list.append(source)
 
-            url_list = [
-                DocumentParser.parse_urls(self.search.run(f"{query} {link}"))
-                for link in search_list
-            ]
+                st.write("Searching for Additional Sources...")
 
-        else:
-            url_list = [DocumentParser.parse_urls(self.search.run(query))]
+                url_list = [
+                    self.parse_urls(self.search.run(f"{query} {link}"))
+                    for link in search_list
+                ]
 
-        for url in url_list:
-            sources.extend(url)
+            else:
+                url_list = [self.parse_urls(self.search.run(query))]
 
-        return sources
+            for url in url_list:
+                sources.extend(url)
+
+        except Exception:
+            return "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub."
+
+        try:
+            return self.clean_url_list(sources)
+        except Exception:
+            return "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub."
+
+    @staticmethod
+    def clean_url_list(dup_url_list) -> list:
+        """
+        Cleans a list of URLs by removing known problematic URLs.
+
+        Args:
+            dup_url_list (list): A list of URLs to be cleaned.
+
+        Returns:
+            list: A cleaned list of unique URLs.
+        """
+
+        urls_to_remove = [
+            "https://playrusvulkan.org/tortoise-git-quick-guide",
+            "data\\TortoiseGit-Manual.pdf",
+            "data\\TortoiseGitMerge-Manual.pdf",
+            "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
+        ]  # URLs with known issues
+        interim_url_list = [
+            element for element in dup_url_list if element not in urls_to_remove
+        ]
+        clean_url_list = list(set(interim_url_list))
+
+        return clean_url_list
 
     @staticmethod
     def parse_urls(search_results: str) -> list:
@@ -610,123 +503,35 @@ class DocumentParser:
         pattern = r"https://[^\]]+"
         return re.findall(pattern, search_results)
 
-
-class GitBuddyChatBot:
-    """
-    Git Buddy class used to return LLM results to the streamlit app
-
-    Attributes:
-        config (Config): Configuration settings for the chat bot
-        api_handler (APIHandler): API Rate Limit handling for the LLM
-        doc_retriever (ContextualCompressionRetriever): Retriever used to find and rerank Pinecone documents
-        doc_parser (DocumentParser): Parser used to extract sources from documents
-    """
-
-    def __init__(self, config, api_handler, doc_retriever, doc_parser):
-        self.config = config
-        self.api_handler = api_handler
-        self.doc_retriever = doc_retriever
-        self.doc_parser = doc_parser
-
-    def get_improved_answer(self, query):
-        try:
-            st.write("Retrieving relevant documents from Pinecone....")
-            relevant_docs = self.doc_retriever.invoke(query)
-        except Exception:
-            return DocumentRetrievalException(
-                "Error occurred retrieving relevant documents. Please try query again. If error persists create an issue on GitHub."
-            )
-        try:
-            st.write("Extracting sources from documents...")
-            sources = [doc.metadata["source"] for doc in relevant_docs]
-            st.write("Finding related webpages...")
-            links = self.doc_parser.get_search_query(query, sources)
-        except Exception:
-            return SourceExtractionException(
-                "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub."
-            )
-        try:
-            urls_to_remove = [
-                "https://playrusvulkan.org/tortoise-git-quick-guide",
-                "data\\TortoiseGit-Manual.pdf",
-                "data\\TortoiseGitMerge-Manual.pdf",
-                "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
-            ]  # URLs with known issues
-            interim_url_list = [
-                element for element in links if element not in urls_to_remove
-            ]
-            clean_url_list = list(set(interim_url_list))
-        except Exception:
-            return URLCleaningException(
-                "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub."
-            )
-        try:
-            st.write("Verifying we are within API limitations...")
-            return self.api_handler.make_request_with_retry(
-                lambda: self.api_handler.verify_api_limits(
-                    query, relevant_docs, clean_url_list
-                )
-            )
-        except Exception as e:
-            return LLMChainException(
-                f"Error occurred while generating an answer with LLMChain. Please try query again. Additional error information: {e}"
-            )
-
-    @staticmethod
-    def set_chat_messages(chat_response):
+    def make_request_with_retry(self, additional_sources):
         """
-        Append a new chat message to the session's message list.
+        Makes a request to the chain with retries in case of exceptions.
 
         Args:
-            chat_response (str): The chat response to append.
+            additional_sources (list): A list of additional sources to include in the request.
+
+        Returns:
+            str: The answer from the chain.
+
+        Raises:
+            LLMChainException: If an error occurs while making the request to the LLMChain.
         """
-        message = {
-            "role": "assistant",
-            "content": chat_response,
-        }
-        st.session_state.messages.append(message)
 
+        try:
+            with get_openai_callback() as cb:
+                result = self.chain.invoke(
+                    {
+                        "input": st.session_state.messages[-1]["content"],
+                        "url_sources": convert_to_messages(additional_sources),
+                    },
+                    config={"configurable": {"session_id": "[001]"}},
+                )
+        except Exception as e:
+            return f"Ran into an error while making a request to GPT 3.5-Turbo. The following error was raised {e}"
 
-class TokenLimitExceededException(Exception):
-    """
-    Exception raised when the token limit is exceeded.
-    """
-
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-class APIRequestException(Exception):
-    """Exception raised for errors in API requests."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class DocumentRetrievalException(Exception):
-    """Exception raised for errors retrieving documents."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class SourceExtractionException(Exception):
-    """Exception raised for errors extracting document sources."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class URLCleaningException(Exception):
-    """Exception raised for errors cleaning URLs."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class LLMChainException(Exception):
-    """Exception raised for errors with LLMChain."""
-
-    def __init__(self, message):
-        super().__init__(message)
+        print(result["input"])
+        print(result["url_sources"])
+        print(result["chat_history"])
+        print(result["context"])
+        print(result["answer"])
+        return result["answer"]

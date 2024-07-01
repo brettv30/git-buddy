@@ -1,11 +1,10 @@
 import streamlit as st
+from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+import random
 from utilities.utils import (
     Config,
     ComponentInitializer,
     APIHandler,
-    DocumentParser,
-    GitBuddyChatBot,
-    PromptParser,
 )
 
 # Start Streamlit app
@@ -17,20 +16,23 @@ st.title("Git Buddy")
 # Initialize chatbot components
 @st.cache_resource
 def set_up_components():
-    config = Config()
-    all_components = ComponentInitializer(config)
+    all_components = ComponentInitializer(Config())
 
-    (prompt, qa_llm, search, memory, retriever) = all_components.initialize_components()
-    prompt_parser = PromptParser(config, memory, prompt)
+    rag_chain, retriever_chain = all_components.initialize_components()
 
-    api_handler = APIHandler(config, prompt_parser, prompt, memory, qa_llm)
-    doc_parser = DocumentParser(search)
-    git_buddy = GitBuddyChatBot(config, api_handler, retriever, doc_parser)
+    api_handler = APIHandler(rag_chain, retriever_chain)
 
-    return prompt_parser, git_buddy
+    # Generate a random 4-digit number with leading zeros
+    api_handler.set_session_id(f"{random.randint(0, 9999):04}")
+
+    return api_handler
 
 
-prompt_parser, git_buddy = set_up_components()
+api_handler = set_up_components()
+ctx = get_script_run_ctx()
+
+# Set unique session ID to store individual histories for each session
+api_handler.set_session_id(ctx.session_id)
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -55,31 +57,50 @@ for message in st.session_state.messages:
 # If last message is not from assistant, then respond
 if st.session_state.messages[-1]["role"] != "assistant":
     st.chat_input("", disabled=True)
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            with st.status("Accessing Tools...", expanded=True) as status:
-                chat_response = git_buddy.get_improved_answer(
-                    st.session_state.messages[-1]["content"]
-                )
-                status.update(
-                    label="Look here for a play-by-play...",
-                    state="complete",
-                    expanded=False,
-                )
-
-            if type(chat_response) is not str:
-                st.error(chat_response)
-                git_buddy.set_chat_messages(chat_response)
-                with st.status("Looking for issues...", expanded=True) as status:
-                    st.write("Clearing Git Buddy's memory to free up token space...")
-                    prompt_parser.clear_memory()
-                    st.write("Memory cleared...")
+    # Stop someone from being silly
+    if len(st.session_state.messages[-1]["content"]) > 1000:
+        st.write(
+            "Your question is too long. Please ask your question again with less words."
+        )
+        message = {
+            "role": "assistant",
+            "content": "Your question is too long. Please reword it with less words.",
+        }
+        st.session_state.messages.append(message)
+    elif len(st.session_state.messages[-1]["content"]) < 10:
+        st.write("Please ask a question with more words.")
+        message = {
+            "role": "assistant",
+            "content": "Please ask a question with more words.",
+        }
+        st.session_state.messages.append(message)
+    else:
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                with st.status("Accessing Tools...", expanded=True) as status:
+                    api_handler.set_user_query(st.session_state.messages[-1]["content"])
+                    additional_sources = api_handler.find_additional_sources(
+                        st.session_state.messages[-1]["content"]
+                    )
+                    st.write("Making OpenAI API Request...")
+                    chat_response = api_handler.make_request_with_retry(
+                        additional_sources
+                    )
                     status.update(
-                        label="Ready for more questions!",
+                        label="Look here for a play-by-play...",
                         state="complete",
                         expanded=False,
                     )
-            else:
-                st.write(chat_response)
-                git_buddy.set_chat_messages(chat_response)
+
+                    if type(chat_response) is not str:
+                        st.error(chat_response)
+                    else:
+                        st.write(chat_response)
+
+                message = {
+                    "role": "assistant",
+                    "content": chat_response,
+                }
+                st.session_state.messages.append(message)
+
     st.rerun()
