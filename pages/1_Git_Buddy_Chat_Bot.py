@@ -48,7 +48,8 @@ for message in st.session_state.messages:
 # If last message is not from assistant, then respond
 if st.session_state.messages[-1]["role"] != "assistant":
     st.chat_input("", disabled=True)
-    if len(st.session_state.messages[-1]["content"]) > 10000:
+    # Stop someone from being silly
+    if len(st.session_state.messages[-1]["content"]) > 1000:
         st.write(
             "Your question is too long. Please ask your question again with less words."
         )
@@ -68,7 +69,7 @@ if st.session_state.messages[-1]["role"] != "assistant":
                     st.write("Making OpenAI API Request...")
                     chat_response = api_handler.make_request_with_retry(
                         additional_sources
-                    )  # Need to add parameter for the list of additional sources
+                    )
                     status.update(
                         label="Look here for a play-by-play...",
                         state="complete",

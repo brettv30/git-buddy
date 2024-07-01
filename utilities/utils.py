@@ -1,68 +1,60 @@
 import re
-import time
-import random
-import tiktoken
 import streamlit as st
-from openai import RateLimitError
-from langchain.chains import LLMChain
-from bs4 import BeautifulSoup as Soup
-from langchain_openai import ChatOpenAI
-from langchain_openai import OpenAIEmbeddings
-from langchain_core.documents import Document
-from langchain_core.prompts import (
-    PromptTemplate,
-    MessagesPlaceholder,
-    ChatPromptTemplate,
-    FewShotChatMessagePromptTemplate,
-)
-from langchain_community.callbacks.manager import get_openai_callback
-from langchain_core.messages.utils import convert_to_messages
-from langchain.chains.combine_documents.base import DOCUMENTS_KEY
-from operator import itemgetter
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
-from langchain_pinecone import PineconeVectorStore
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain_cohere import CohereRerank
 from langchain.chains import (
     create_history_aware_retriever,
     create_retrieval_chain,
 )
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.chains.conversation.memory import ConversationBufferWindowMemory
-from langchain_community.document_loaders import RecursiveUrlLoader, DirectoryLoader
-from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.prompts import (
+    MessagesPlaceholder,
+    ChatPromptTemplate,
+)
+from bs4 import BeautifulSoup as Soup
+from langchain_openai import ChatOpenAI
+from langchain_cohere import CohereRerank
+from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
+from langchain_pinecone import PineconeVectorStore
+from langchain_community.document_loaders import (
+    RecursiveUrlLoader,
+    DirectoryLoader,
+)
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.messages.utils import convert_to_messages
 from langchain_core.chat_history import BaseChatMessageHistory
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.chains.combine_documents.base import DOCUMENTS_KEY
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.callbacks.manager import get_openai_callback
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.prompt_values import PromptValue
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain.chains.combine_documents import create_stuff_documents_chain
 
 
 class Config:
     """
-    Config class to hold configuration settings for the application.
+    Manages the configuration settings for the application, including API keys, model limits, and directory paths.
 
-    Attributes:
-        openai_api_key (str): API key for OpenAI.
-        pinecone_api_key (str): API key for Pinecone.
-        cohere_api_key (str): API key for Cohere.
-        model_request_limit_per_minute (int): Limit for model requests per minute.
-        model_token_limit_per_query (int): Token limit for each query to the model.
-        directory (str): Directory path for storing data.
-        embeddings_model (str): Model used for text embeddings.
-        index_name (str): Name of the Pinecone index.
-        model_name (str): Name of the language model.
-        retrieved_documents (int): Number of documents to retrieve for each query.
-        prompt_template (str): Template for the chatbot prompt.
+    Args:
+        openai_api_key (str): The OpenAI API key.
+        pinecone_api_key (str): The Pinecone API key.
+        cohere_api_key (str): The Cohere API key.
+        directory (str): The directory for storing data.
+        embeddings_model (str): The name of the embeddings model to use.
+        index_name (str): The name of the Pinecone index.
+        model_name (str): The name of the language model to use.
+        retrieved_documents (int): The number of documents to retrieve.
+        prompt_template (str): The template for the prompt used in the RAG (Retrieval Augmented Generation) model.
+        contextualize_q_system_prompt (str): The system prompt for the contextualize_q model.
+        contextualize_q_prompt (ChatPromptTemplate): The prompt template for the contextualize_q model.
+        rag_prompt (ChatPromptTemplate): The prompt template for the RAG model.
+        user_query (str): The current user query.
+        total_tokens (int): The total number of tokens used in the current session.
     """
 
     def __init__(self):
         self.openai_api_key = st.secrets["OPENAI_API_KEY"]
         self.pinecone_api_key = st.secrets["PINECONE_API_KEY"]
         self.cohere_api_key = st.secrets["COHERE_API_KEY"]
-        self.model_request_limit_per_minute = 500
-        self.model_token_limit_per_query = 10000
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
@@ -77,9 +69,7 @@ Never use the sources from the context in an answer, only use the sources from u
 Use the additional sources as recommendaations to the user at the end of the response.
 
 Use the following pieces of context to answer the question at the end:
-<context 
 {context}
-context>
 
 Use the following format:
 
@@ -147,7 +137,6 @@ Additional Sources:
                 ("human", "{input}"),
             ]
         )
-        self.encoding = tiktoken.get_encoding("cl100k_base")
         self.user_query = ""
         self.total_tokens = 0
 
@@ -283,13 +272,19 @@ class DocumentManager:
 
 class ComponentInitializer(Config):
     """
-    Initializer class used to initialize all Pinecone, Cohere, Langchain, and OpenAI Components
+    Initializes and manages the components required for the application, including embeddings, index, retriever, and other necessary objects.
 
     Attributes:
-        config (Config): Configuration settings for the component initializer.
-        memory (int): Maximum number of Human/AI interactions retained in model memory
-        top_docs (int): Maximum number of documents retained after document reranking
-        temperature (float): Number indicating the level of predictability as it pertains to model output
+        config (Config): The configuration object containing settings for the application.
+        top_docs (int): The number of top documents to retrieve.
+        temperature (float): The temperature parameter for the language model.
+        store (dict): A dictionary to store session history for each user.
+
+    Methods:
+        initialize_components() -> tuple:
+            Initializes the components required for the application, such as embeddings, index, retriever, and language model. Returns a tuple containing the initialized components.
+        get_session_history(session_id) -> BaseChatMessageHistory:
+            Retrieves the chat message history for the given session ID. If the session ID is not found in the store, a new ChatMessageHistory object is created and stored.
     """
 
     def __init__(self, config):
@@ -300,11 +295,14 @@ class ComponentInitializer(Config):
 
     def initialize_components(self):
         """
-        Initialize components for Pinecone and LangChain including embeddings, index, retriever, etc.
+        Initializes and returns the necessary components for the application, including embeddings, index, retriever, compressor, and language model.
 
         Returns:
-            tuple: A tuple containing initialized components such as prompt, index, QA LLM, search, memory, and compression retriever.
+            tuple: A tuple containing the initialized components:
+                - conversational_rag_chain: A RunnableWithMessageHistory object that combines a retrieval-augmented generation (RAG) chain with message history.
+                - history_aware_retriever: A ContextualCompressionRetriever object that retrieves and compresses documents based on the chat history.
         """
+
         embeddings = OpenAIEmbeddings(model=self.config.embeddings_model)
         docsearch = PineconeVectorStore.from_existing_index(
             embedding=embeddings, index_name=self.config.index_name
@@ -338,28 +336,39 @@ class ComponentInitializer(Config):
         return conversational_rag_chain, history_aware_retriever
 
     def get_session_history(self, session_id) -> BaseChatMessageHistory:
+        """
+        Retrieves and manages the chat history for a given session.
+
+        Args:
+            session_id (str): The unique identifier for the current session.
+
+        Returns:
+            BaseChatMessageHistory: The chat message history for the given session.
+        """
+
         if session_id not in self.store:
             self.store[session_id] = ChatMessageHistory()
 
-        if len(self.store[session_id].messages) > 10:
-            print("REDUCING MEMORY!!")
-            print("SHOULD DROP THE 1 OLDEST MESSAGES")
-            self.store[session_id].messages = self.store[session_id].messages[-9:]
+        print("Length of Chat History: ", len(self.store[session_id].messages))
+        if (
+            len(self.store[session_id].messages) > 16
+        ):  # Only keep the 7 most recent chat history messages at any time
+            self.store[session_id].messages = self.store[session_id].messages[-14:]
 
         return self.store[session_id]
 
 
 class APIHandler(Config):
     """
-    API Handler class used to handle all API Rate Limit Errors
+    The `APIHandler` class is responsible for handling API requests and managing the retrieval and processing of additional sources based on a user's query.
 
-    Attributes:
-        config (Config): Configuration settings for the API Handler
-        prompt_parser (PromptParser): Prompt Parser methods used to handle token limitations
-        llm_prompt (str): Prompt passed into the Large Language Model
-        chat_memory (dict): Dictionary containing the last 4 Human/AI interactions in chat_history
-        qa_llm (LLMChain): OpenAI LLM model instance
-        max_retries (int): Maximum number of retries before the application returns an error
+    The class has the following key responsibilities:
+
+    1. Initializes the necessary components and configurations for the API handling process.
+    2. Provides a method `find_additional_sources` to generate search queries based on a list of sources and retrieve additional contextual documents.
+    3. Implements a `make_request_with_retry` method to attempt making an API call with a retry mechanism in case of rate limit errors.
+
+    The class uses various helper methods and exceptions to handle different aspects of the API handling process, such as URL cleaning, source extraction, and error handling.
     """
 
     def __init__(self, chain, retriever_chain, max_retries=5):
@@ -373,19 +382,26 @@ class APIHandler(Config):
 
     @staticmethod
     def set_user_query(query):
+        """
+        Sets the user's query for the application.
+
+        Args:
+            query (str): The user's query to be processed by the application.
+        """
+
         Config.user_query = query
 
     def find_additional_sources(self, query) -> list:
         """
-        Generate search queries based on a list of sources.
+        Retrieves additional contextual documents based on the given query.
 
         Args:
-            sources (list): A list of sources to generate search queries for.
-            query (string): the query sent through the chatbot from the user
+            query (str): The user's query to be used for searching additional sources.
 
         Returns:
-            list: A list of generated search queries.
+            list: A list of cleaned URLs for the additional sources.
         """
+
         st.write("Retrieving Contextual Documents...")
         doc_list = self.retriever_chain.invoke({"input": query})
 
@@ -431,6 +447,16 @@ class APIHandler(Config):
 
     @staticmethod
     def clean_url_list(dup_url_list) -> list:
+        """
+        Cleans a list of URLs by removing known problematic URLs.
+
+        Args:
+            dup_url_list (list): A list of URLs to be cleaned.
+
+        Returns:
+            list: A cleaned list of unique URLs.
+        """
+
         urls_to_remove = [
             "https://playrusvulkan.org/tortoise-git-quick-guide",
             "data\\TortoiseGit-Manual.pdf",
@@ -460,17 +486,16 @@ class APIHandler(Config):
 
     def make_request_with_retry(self, additional_sources):
         """
-        Attempt to make an API call with a retry mechanism on RateLimitError.
+        Makes a request to the chain with retries in case of exceptions.
 
         Args:
-            api_call (callable): The API call function to be executed.
-            max_retries (int): Maximum number of retries.
+            additional_sources (list): A list of additional sources to include in the request.
 
         Returns:
-            Any: The result of the API call if successful.
+            str: The answer from the chain.
 
         Raises:
-            Exception: If the rate limit is still hit after the maximum number of retries.
+            LLMChainException: If an error occurs while making the request to the LLMChain.
         """
 
         try:
@@ -491,48 +516,3 @@ class APIHandler(Config):
         print(result["context"])
         print(result["answer"])
         return result["answer"]
-
-
-class TokenLimitExceededException(Exception):
-    """
-    Exception raised when the token limit is exceeded.
-    """
-
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
-class APIRequestException(Exception):
-    """Exception raised for errors in API requests."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class DocumentRetrievalException(Exception):
-    """Exception raised for errors retrieving documents."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class SourceExtractionException(Exception):
-    """Exception raised for errors extracting document sources."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class URLCleaningException(Exception):
-    """Exception raised for errors cleaning URLs."""
-
-    def __init__(self, message):
-        super().__init__(message)
-
-
-class LLMChainException(Exception):
-    """Exception raised for errors with LLMChain."""
-
-    def __init__(self, message):
-        super().__init__(message)

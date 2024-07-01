@@ -9,5 +9,4 @@ langchain_text_splitters==0.2.1
 openai==1.34.0
 pinecone==4.0.0
 streamlit==1.29.0
-tiktoken==0.7.0
 duckduckgo-search
