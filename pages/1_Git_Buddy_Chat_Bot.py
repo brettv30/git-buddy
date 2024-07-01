@@ -16,9 +16,9 @@ st.title("Git Buddy")
 def set_up_components():
     all_components = ComponentInitializer(Config())
 
-    rag_chain = all_components.initialize_components()
+    rag_chain, retriever_chain = all_components.initialize_components()
 
-    api_handler = APIHandler(rag_chain)
+    api_handler = APIHandler(rag_chain, retriever_chain)
 
     return api_handler
 
@@ -48,26 +48,42 @@ for message in st.session_state.messages:
 # If last message is not from assistant, then respond
 if st.session_state.messages[-1]["role"] != "assistant":
     st.chat_input("", disabled=True)
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            with st.status("Accessing Tools...", expanded=True) as status:
-                api_handler.set_user_query(st.session_state.messages[-1]["content"])
-                chat_response = api_handler.make_request_with_retry()
-                status.update(
-                    label="Look here for a play-by-play...",
-                    state="complete",
-                    expanded=False,
-                )
+    if len(st.session_state.messages[-1]["content"]) > 10000:
+        st.write(
+            "Your question is too long. Please ask your question again with less words."
+        )
+        message = {
+            "role": "assistant",
+            "content": "Your question is too long. Please reword it with less words.",
+        }
+        st.session_state.messages.append(message)
+    else:
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                with st.status("Accessing Tools...", expanded=True) as status:
+                    api_handler.set_user_query(st.session_state.messages[-1]["content"])
+                    additional_sources = api_handler.find_additional_sources(
+                        st.session_state.messages[-1]["content"]
+                    )
+                    st.write("Making OpenAI API Request...")
+                    chat_response = api_handler.make_request_with_retry(
+                        additional_sources
+                    )  # Need to add parameter for the list of additional sources
+                    status.update(
+                        label="Look here for a play-by-play...",
+                        state="complete",
+                        expanded=False,
+                    )
 
-            if type(chat_response) is not str:
-                st.error(chat_response)
-                st.rerun()
-            else:
-                st.write(chat_response)
+                    if type(chat_response) is not str:
+                        st.error(chat_response)
+                    else:
+                        st.write(chat_response)
 
-            message = {
-                "role": "assistant",
-                "content": chat_response,
-            }
-            st.session_state.messages.append(message)
+                message = {
+                    "role": "assistant",
+                    "content": chat_response,
+                }
+                st.session_state.messages.append(message)
+
     st.rerun()

@@ -15,6 +15,9 @@ from langchain_core.prompts import (
     ChatPromptTemplate,
     FewShotChatMessagePromptTemplate,
 )
+from langchain_community.callbacks.manager import get_openai_callback
+from langchain_core.messages.utils import convert_to_messages
+from langchain.chains.combine_documents.base import DOCUMENTS_KEY
 from operator import itemgetter
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -59,7 +62,7 @@ class Config:
         self.pinecone_api_key = st.secrets["PINECONE_API_KEY"]
         self.cohere_api_key = st.secrets["COHERE_API_KEY"]
         self.model_request_limit_per_minute = 500
-        self.model_token_limit_per_query = 16000
+        self.model_token_limit_per_query = 10000
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
@@ -71,6 +74,7 @@ You should only ever answer questions if either the question or the context rela
 Never include the example questions and answers from this prompt in any response.
 If possible, please provide example code to help the beginner learn Git commands. 
 Never use the sources from the context in an answer, only use the sources from url_sources.
+Use the additional sources as recommendaations to the user at the end of the response.
 
 Use the following pieces of context to answer the question at the end:
 <context 
@@ -139,13 +143,13 @@ Additional Sources:
             [
                 ("system", self.prompt_template),
                 MessagesPlaceholder("chat_history"),
+                MessagesPlaceholder("url_sources"),
                 ("human", "{input}"),
             ]
         )
         self.encoding = tiktoken.get_encoding("cl100k_base")
-        self.store = {}
-        self.session_id = "0001"
         self.user_query = ""
+        self.total_tokens = 0
 
 
 class DocumentManager:
@@ -319,6 +323,7 @@ class ComponentInitializer(Config):
         history_aware_retriever = create_history_aware_retriever(
             llm, compression_retriever, self.config.contextualize_q_prompt
         )
+
         qa_chain = create_stuff_documents_chain(llm, self.config.rag_prompt)
         rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
@@ -330,123 +335,16 @@ class ComponentInitializer(Config):
             output_messages_key="answer",
         )
 
-        return conversational_rag_chain
+        return conversational_rag_chain, history_aware_retriever
 
     def get_session_history(self, session_id) -> BaseChatMessageHistory:
         if session_id not in self.store:
             self.store[session_id] = ChatMessageHistory()
-        print(self.store[session_id])
         return self.store[session_id]
 
-    def compress_prompt(self, prompt):
-        prompt_string = prompt.to_string()
-
-        try:
-            if (
-                len(self.config.encoding.encode(prompt_string))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write("Within the OpenAI API token limit. Running LLM...")
-                return PromptValue(prompt_string)
-
-            st.write("At the OpenAI API token limit: Removing retrieved documents...")
-            prompt_no_context = self.remove_context(prompt_string)
-            if (
-                len(self.config.encoding.encode(prompt_no_context))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write(
-                    "Within the OpenAI API token limit after removing contextual documents. Running LLM..."
-                )
-                return PromptValue(prompt_no_context)
-        except Exception:
-            st.write("Couldn't fall under the OpenAI API token limit...")
-            return TokenLimitExceededException(
-                "Final prompt still exceeds 16,000 tokens. Please ask your question again with less words."
-            )
-
-    @staticmethod
-    def remove_context(prompt_str):
-        pattern = r"<context.?context>"
-        cleaned_prompt = re.sub(pattern, "", prompt_str)
-        return cleaned_prompt
-
-    @staticmethod
-    def format_docs(docs):
-        print("Formatting documents...")
-        return "\n\n".join(doc.page_content for doc in docs)
-
-    @staticmethod
-    def get_search_query(docs) -> list:
-        """
-        Generate search queries based on a list of sources.
-
-        Args:
-            sources (list): A list of sources to generate search queries for.
-            query (string): the query sent through the chatbot from the user
-
-        Returns:
-            list: A list of generated search queries.
-        """
-        search_list = []
-        search = DuckDuckGoSearchRun()
-
-        try:
-
-            print("Extracting sources from documents...")
-            sources = [doc.metadata["source"] for doc in docs]
-            print("Finding related webpages...")
-
-            pattern = r"hhttps:\/\/[a-zA-Z0-9.-]+\.(edu|com|org)\b"
-
-            if sources:
-                for source in sources:
-                    if source == "data\\TortoiseGit-Manual.pdf":
-                        sources.remove(source)
-                        source = "TortoiseGit-Manual"
-                        if source not in search_list:
-                            search_list.append(source)
-                    elif source == "data\\TortoiseGitMerge-Manual.pdf":
-                        sources.remove(source)
-                        source = "TortoiseGitMerge-Manual"
-                        if source not in search_list:
-                            search_list.append(source)
-                    elif source not in search_list:
-                        search_list.append(source)
-
-                url_list = [
-                    re.findall(pattern, search.run(f"{Config.user_query} {link}"))
-                    for link in search_list
-                ]
-
-            else:
-                url_list = [re.findall(pattern, search.run(Config.user_query))]
-
-            for url in url_list:
-                sources.extend(url)
-        except Exception:
-            return SourceExtractionException(
-                "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub."
-            )
-
-        try:
-            urls_to_remove = [
-                "https://playrusvulkan.org/tortoise-git-quick-guide",
-                "data\\TortoiseGit-Manual.pdf",
-                "data\\TortoiseGitMerge-Manual.pdf",
-                "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
-            ]  # URLs with known issues
-            interim_url_list = [
-                element for element in sources if element not in urls_to_remove
-            ]
-            clean_url_list = list(set(interim_url_list))
-
-            return clean_url_list
-
-        except Exception:
-            return URLCleaningException(
-                "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub."
-            )
+    def clear_history(self):
+        session_id = "[001]"
+        self.store[session_id] = ChatMessageHistory()
 
 
 class APIHandler(Config):
@@ -462,15 +360,104 @@ class APIHandler(Config):
         max_retries (int): Maximum number of retries before the application returns an error
     """
 
-    def __init__(self, chain, max_retries=5):
+    def __init__(self, chain, retriever_chain, max_retries=5):
+        self.conf_obj = Config()
+        self.comp_obj = ComponentInitializer(self.conf_obj)
         self.max_retries = max_retries
         self.chain = chain
+        self.retriever_chain = retriever_chain
+        self.total_tokens = 0
 
     @staticmethod
     def set_user_query(query):
         Config.user_query = query
 
-    def make_request_with_retry(self):
+    def find_additional_sources(self, query) -> list:
+        """
+        Generate search queries based on a list of sources.
+
+        Args:
+            sources (list): A list of sources to generate search queries for.
+            query (string): the query sent through the chatbot from the user
+
+        Returns:
+            list: A list of generated search queries.
+        """
+        st.write("Retrieving Contextual Documents...")
+        doc_list = self.retriever_chain.invoke({"input": query})
+
+        sources = [doc.metadata["source"] for doc in doc_list]
+        search_list = []
+
+        search = DuckDuckGoSearchRun()
+
+        try:
+            if sources:
+                for source in sources:
+                    if source == "data\\TortoiseGit-Manual.pdf":
+                        sources.remove(source)
+                        source = "TortoiseGit-Manual"
+                        if source not in search_list:
+                            search_list.append(source)
+                    elif source == "data\\TortoiseGitMerge-Manual.pdf":
+                        sources.remove(source)
+                        source = "TortoiseGitMerge-Manual"
+                        if source not in search_list:
+                            search_list.append(source)
+                    elif source not in search_list:
+                        search_list.append(source)
+
+                st.write("Searching for Additional Sources...")
+
+                url_list = [
+                    self.parse_urls(search.run(f"{query} {link}"))
+                    for link in search_list
+                ]
+
+            else:
+                url_list = [self.parse_urls(search.run(query))]
+
+            for url in url_list:
+                sources.extend(url)
+
+        except Exception:
+            return "Error occurred while extracting document sources. Please try query again. If error persists create an issue on GitHub."
+
+        try:
+            return self.clean_url_list(sources)
+        except Exception:
+            return "Error occurred while cleaning source URLs. Please try query again. If error persists create an issue on GitHub."
+
+    @staticmethod
+    def clean_url_list(dup_url_list) -> list:
+        urls_to_remove = [
+            "https://playrusvulkan.org/tortoise-git-quick-guide",
+            "data\\TortoiseGit-Manual.pdf",
+            "data\\TortoiseGitMerge-Manual.pdf",
+            "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
+        ]  # URLs with known issues
+        interim_url_list = [
+            element for element in dup_url_list if element not in urls_to_remove
+        ]
+        clean_url_list = list(set(interim_url_list))
+
+        return clean_url_list
+
+    @staticmethod
+    def parse_urls(search_results: str) -> list:
+        """
+        Extract URLs from search results.
+
+        Args:
+            search_results (str): The string containing search results with URLs.
+
+        Returns:
+            list: A list of extracted URLs.
+        """
+        pattern = r"https://[^\]]+"
+        return re.findall(pattern, search_results)
+
+    def make_request_with_retry(self, additional_sources):
         """
         Attempt to make an API call with a retry mechanism on RateLimitError.
 
@@ -484,171 +471,53 @@ class APIHandler(Config):
         Raises:
             Exception: If the rate limit is still hit after the maximum number of retries.
         """
-        for i in range(self.max_retries):
-            try:
+
+        try:
+            if self.total_tokens > 10000:
+                st.write("Over 10K tokens in last prompt. Clearing Chat History...")
+                with get_openai_callback() as cb:
+                    result = self.chain.invoke(
+                        {
+                            "input": st.session_state.messages[-1]["content"],
+                            "url_sources": convert_to_messages(additional_sources),
+                            "chat_history": convert_to_messages([]),
+                        },
+                        config={"configurable": {"session_id": "[001]"}},
+                    )
+
+            with get_openai_callback() as cb:
                 result = self.chain.invoke(
-                    {"input": st.session_state.messages[-1]["content"]},
+                    {
+                        "input": st.session_state.messages[-1]["content"],
+                        "url_sources": convert_to_messages(additional_sources),
+                    },
                     config={"configurable": {"session_id": "[001]"}},
                 )
-                print(result["input"])
-                print(result["chat_history"])
-                print(result["context"])
-                print(result["answer"])
-                return result["answer"]
-            except RateLimitError:
-                st.write(
-                    "Rate Limit was hit. Waiting a little while before trying again..."
-                )
-                wait_time = (2**i) + random.random()
-                time.sleep(wait_time)
-        raise APIRequestException(
-            "OpenAI API Request Rate Limit was reached. Please wait a few minutes before trying again."
-        )
-
-    def verify_api_limits(self, query, relevant_docs, clean_url_list):
-        """
-        Verify if the generated prompt is within the token limit of the OpenAI API and run the LLM chain.
-
-        Args:
-            query (str): The user query to process.
-            relevant_docs (list): List of relevant documents to include in the prompt.
-            clean_url_list (list): List of cleaned URLs to include in the prompt.
-
-        Returns:
-            Any: The result from the LLM chain if the prompt is within the token limit.
-
-        Raises:
-            TokenLimitExceededException: If the final prompt exceeds the token limit.
-        """
-        try:
-            chat_history_dict = self.chat_memory.load_memory_variables({})
-            formatted_prompt = self.llm_prompt.format(
-                human_input=query,
-                context=relevant_docs,
-                chat_history=chat_history_dict["chat_history"],
-                url_sources=clean_url_list,
-            )
-
-            if (
-                len(self.config.encoding.encode(formatted_prompt))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write("Within the OpenAI API token limit. Running LLM...")
-                return self.qa_llm.run(
-                    {
-                        "context": relevant_docs,
-                        "human_input": query,
-                        "chat_history": self.chat_memory.load_memory_variables({}),
-                        "url_sources": clean_url_list,
-                    }
-                )
-
-            st.write(
-                "Reached the OpenAI API token limit: Removing interactions from chat history..."
-            )
-            reduced_chat_history_dict = self.prompt_parser.reduce_chat_history_tokens(
-                chat_history_dict
-            )
-            formatted_prompt_with_reduced_history = self.llm_prompt.format(
-                human_input=query,
-                context=relevant_docs,
-                chat_history=reduced_chat_history_dict["chat_history"],
-                url_sources=clean_url_list,
-            )
-
-            if (
-                len(self.config.encoding.encode(formatted_prompt_with_reduced_history))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write(
-                    "Within the OpenAI API token limit after reducing chat history. Running LLM..."
-                )
-                return self.qa_llm.run(
-                    {
-                        "context": relevant_docs,
-                        "human_input": query,
-                        "chat_history": reduced_chat_history_dict["chat_history"],
-                        "url_sources": clean_url_list,
-                    }
-                )
-
-            st.write(
-                "Still at the OpenAI API token limit: Reducing number of retrieved documents..."
-            )
-            shorter_relevant_docs = self.prompt_parser.reduce_doc_tokens(
-                relevant_docs,
-                formatted_prompt_with_reduced_history,
-                query,
-                reduced_chat_history_dict,
-                clean_url_list,
-            )
-            processed_prompt = self.llm_prompt.format(
-                human_input=query,
-                context=shorter_relevant_docs,
-                chat_history=reduced_chat_history_dict["chat_history"],
-                url_sources=clean_url_list,
-            )
-            if (
-                len(self.config.encoding.encode(processed_prompt))
-                < self.config.model_token_limit_per_query
-            ):
-                st.write(
-                    "Within the OpenAI API token limit after reducing documents and chat history. Running LLM..."
-                )
-                return self.qa_llm.run(
-                    {
-                        "context": relevant_docs,
-                        "human_input": query,
-                        "chat_history": reduced_chat_history_dict["chat_history"],
-                        "url_sources": clean_url_list,
-                    }
-                )
-        except Exception:
-            st.write("Couldn't fall under the OpenAI API token limit...")
-            return TokenLimitExceededException(
-                "Final prompt still exceeds 16,000 tokens. Please ask your question again with less words."
-            )
-
-
-class GitBuddyChatBot(Config):
-    """
-    Git Buddy class used to return LLM results to the streamlit app
-
-    Attributes:
-        config (Config): Configuration settings for the chat bot
-        api_handler (APIHandler): API Rate Limit handling for the LLM
-    """
-
-    def __init__(self, api_handler, chain):
-        self.api_handler = api_handler
-        self.chain = chain
-
-    def get_improved_answer(self, query):
-        try:
-            Config.user_query = query
-            st.write("Verifying we are within API limitations...")
-            return self.api_handler.make_request_with_retry(
-                self.chain.invoke(
-                    {"input": query},
-                    config={"configurable": {"session_id": Config.session_id}},
-                )
-            )
         except Exception as e:
-            return f"Error occurred while generating an response. Please try query again. Additional error information: {e}"
+            return f"Ran into an error while making a request to GPT 3.5-Turbo. The following error was raised {e}"
 
-    @staticmethod
-    def set_chat_messages(chat_response):
-        """
-        Append a new chat message to the session's message list.
+        self.total_tokens = cb.total_tokens
 
-        Args:
-            chat_response (str): The chat response to append.
-        """
-        message = {
-            "role": "assistant",
-            "content": chat_response,
-        }
-        st.session_state.messages.append(message)
+        print(self.total_tokens)
+
+        print(result["input"])
+        print(result["url_sources"])
+        print(result["chat_history"])
+        print(result["context"])
+        print(result["answer"])
+        return result["answer"]
+
+    def trim_messages(self, chain_input):
+        stored_messages = self.store["[001]"].messages
+        if len(stored_messages) <= 2:
+            return False
+
+        Config.store["[001]"].clear()
+
+        for message in stored_messages[-2:]:
+            self.store["[001]"].add_message(message)
+
+        return True
 
 
 class TokenLimitExceededException(Exception):
