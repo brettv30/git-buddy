@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
 import random
 from utilities.utils import (
     Config,
@@ -28,6 +29,10 @@ def set_up_components():
 
 
 api_handler = set_up_components()
+ctx = get_script_run_ctx()
+
+# Set unique session ID to store individual histories for each session
+api_handler.set_session_id(ctx.session_id)
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
