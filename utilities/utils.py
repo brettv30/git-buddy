@@ -142,6 +142,7 @@ Additional Sources:
         )
         self.user_query = ""
         self.total_tokens = 0
+        self.rand_session_id = ""
 
 
 class DocumentManager:
@@ -349,16 +350,20 @@ class ComponentInitializer(Config):
             BaseChatMessageHistory: The chat message history for the given session.
         """
 
-        if session_id not in self.store:
-            self.store[session_id] = StreamlitChatMessageHistory()
+        if Config.rand_session_id not in self.store:
+            self.store[Config.rand_session_id] = StreamlitChatMessageHistory()
 
-        print("Length of Chat History: ", len(self.store[session_id].messages))
+        print(
+            "Length of Chat History: ", len(self.store[Config.rand_session_id].messages)
+        )
         if (
-            len(self.store[session_id].messages) > 16
+            len(self.store[Config.rand_session_id].messages) > 16
         ):  # Only keep the 7 most recent chat history messages at any time
-            self.store[session_id].messages = self.store[session_id].messages[-14:]
+            self.store[Config.rand_session_id].messages = self.store[
+                Config.rand_session_id
+            ].messages[-14:]
 
-        return self.store[session_id]
+        return self.store[Config.rand_session_id]
 
 
 class APIHandler(Config):
@@ -393,6 +398,17 @@ class APIHandler(Config):
         """
 
         Config.user_query = query
+
+    @staticmethod
+    def set_session_id(id):
+        """
+        Sets the user's query for the application.
+
+        Args:
+            query (str): The user's query to be processed by the application.
+        """
+
+        Config.rand_session_id = id
 
     def find_additional_sources(self, query) -> list:
         """

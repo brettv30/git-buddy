@@ -1,4 +1,5 @@
 import streamlit as st
+import random
 from utilities.utils import (
     Config,
     ComponentInitializer,
@@ -19,6 +20,9 @@ def set_up_components():
     rag_chain, retriever_chain = all_components.initialize_components()
 
     api_handler = APIHandler(rag_chain, retriever_chain)
+
+    # Generate a random 4-digit number with leading zeros
+    api_handler.set_session_id(f"{random.randint(0, 9999):04}")
 
     return api_handler
 
