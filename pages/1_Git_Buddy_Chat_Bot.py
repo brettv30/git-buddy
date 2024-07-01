@@ -67,6 +67,13 @@ if st.session_state.messages[-1]["role"] != "assistant":
             "content": "Your question is too long. Please reword it with less words.",
         }
         st.session_state.messages.append(message)
+    elif len(st.session_state.messages[-1]["content"]) < 10:
+        st.write("Please ask a question with more words.")
+        message = {
+            "role": "assistant",
+            "content": "Please ask a question with more words.",
+        }
+        st.session_state.messages.append(message)
     else:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
