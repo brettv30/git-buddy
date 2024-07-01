@@ -340,11 +340,13 @@ class ComponentInitializer(Config):
     def get_session_history(self, session_id) -> BaseChatMessageHistory:
         if session_id not in self.store:
             self.store[session_id] = ChatMessageHistory()
-        return self.store[session_id]
 
-    def clear_history(self):
-        session_id = "[001]"
-        self.store[session_id] = ChatMessageHistory()
+        if len(self.store[session_id].messages) > 10:
+            print("REDUCING MEMORY!!")
+            print("SHOULD DROP THE 1 OLDEST MESSAGES")
+            self.store[session_id].messages = self.store[session_id].messages[-9:]
+
+        return self.store[session_id]
 
 
 class APIHandler(Config):
@@ -473,18 +475,6 @@ class APIHandler(Config):
         """
 
         try:
-            if self.total_tokens > 10000:
-                st.write("Over 10K tokens in last prompt. Clearing Chat History...")
-                with get_openai_callback() as cb:
-                    result = self.chain.invoke(
-                        {
-                            "input": st.session_state.messages[-1]["content"],
-                            "url_sources": convert_to_messages(additional_sources),
-                            "chat_history": convert_to_messages([]),
-                        },
-                        config={"configurable": {"session_id": "[001]"}},
-                    )
-
             with get_openai_callback() as cb:
                 result = self.chain.invoke(
                     {
@@ -495,10 +485,6 @@ class APIHandler(Config):
                 )
         except Exception as e:
             return f"Ran into an error while making a request to GPT 3.5-Turbo. The following error was raised {e}"
-
-        self.total_tokens = cb.total_tokens
-
-        print(self.total_tokens)
 
         print(result["input"])
         print(result["url_sources"])
