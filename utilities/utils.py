@@ -365,6 +365,7 @@ class APIHandler(Config):
     def __init__(self, chain, retriever_chain, max_retries=5):
         self.conf_obj = Config()
         self.comp_obj = ComponentInitializer(self.conf_obj)
+        self.search = DuckDuckGoSearchRun()
         self.max_retries = max_retries
         self.chain = chain
         self.retriever_chain = retriever_chain
@@ -391,8 +392,6 @@ class APIHandler(Config):
         sources = [doc.metadata["source"] for doc in doc_list]
         search_list = []
 
-        search = DuckDuckGoSearchRun()
-
         try:
             if sources:
                 for source in sources:
@@ -412,12 +411,12 @@ class APIHandler(Config):
                 st.write("Searching for Additional Sources...")
 
                 url_list = [
-                    self.parse_urls(search.run(f"{query} {link}"))
+                    self.parse_urls(self.search.run(f"{query} {link}"))
                     for link in search_list
                 ]
 
             else:
-                url_list = [self.parse_urls(search.run(query))]
+                url_list = [self.parse_urls(self.search.run(query))]
 
             for url in url_list:
                 sources.extend(url)
@@ -492,18 +491,6 @@ class APIHandler(Config):
         print(result["context"])
         print(result["answer"])
         return result["answer"]
-
-    def trim_messages(self, chain_input):
-        stored_messages = self.store["[001]"].messages
-        if len(stored_messages) <= 2:
-            return False
-
-        Config.store["[001]"].clear()
-
-        for message in stored_messages[-2:]:
-            self.store["[001]"].add_message(message)
-
-        return True
 
 
 class TokenLimitExceededException(Exception):
