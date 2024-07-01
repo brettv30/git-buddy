@@ -24,10 +24,10 @@ https://github.com/brettv30/git-buddy/assets/50777864/cbf060dd-9c65-42f6-ae48-6b
 
 - **Vector Database Population**: [GitHub Docs](https://docs.github.com/en) & [Progit](https://git-scm.com/book/en/v2) were used as the starting places for a recursive URL search that extracted all important information from each webpage's HTML. [TortoiseGit](https://tortoisegit.org/docs/tortoisegit/) & [TortoiseGitMerge](https://tortoisegit.org/docs/tortoisegitmerge/) were copied as PDFs and split apart during document chunking. 
 - **Document Chunking in RAG**: For the RAG system, document chunks are set to 400 tokens, with a 50-token overlap across documents, optimizing the balance between context and detail.
-- **Document Reranking**: The Cohere `Rerank` model is used to rerank the top 100 documents by finding the top 3 documents most semantically relevant to the query.
+- **Document Reranking**: The Cohere `Rerank` model is used to rerank the top 100 documents by finding the top five documents most semantically relevant to the query.
 - **Embeddings Model**: Utilizes the `text-embedding-ada-002` model from OpenAI for generating document and query embeddings while processing text data.
 - **Prompting Methodology**: Adopts few-shot prompting, conversational memory, and additional document context for robust, efficient, and accurate responses.
-- **Conversational Memory**: Git Buddy retains knowledge of the three most recent messages, ensuring relevant and contextual interactions while excluding older chat history.
+- **Conversational Memory**: Git Buddy retains knowledge of the seven most recent messages, ensuring relevant and contextual interactions while excluding older chat history.
 - **Temperature Setting**: `GPT-3.5-Turbo` operates at a temperature setting of 0.5, balancing creativity and coherence in responses.
 
 ## Additional Resources 🔍
