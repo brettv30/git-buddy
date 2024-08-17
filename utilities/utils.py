@@ -58,10 +58,11 @@ class Config:
         self.openai_api_key = st.secrets["OPENAI_API_KEY"]
         self.pinecone_api_key = st.secrets["PINECONE_API_KEY"]
         self.cohere_api_key = st.secrets["COHERE_API_KEY"]
+        self.langchain_api_key = st.secrets["LANGCHAIN_API_KEY"]
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
-        self.model_name = "gpt-3.5-turbo"
+        self.model_name = "gpt-4o-mini"
         self.retrieved_documents = 100  # Can vary for different retrieval methods
         self.prompt_template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. 
 Your responses are geared towards beginners. 
