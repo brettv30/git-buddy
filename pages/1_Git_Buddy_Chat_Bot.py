@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
 import random
+import os
 from utilities.utils import (
     Config,
     ComponentInitializer,
@@ -16,6 +17,10 @@ st.title("Git Buddy")
 # Initialize chatbot components
 @st.cache_resource
 def set_up_components():
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+    os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
+    os.environ["LANGCHAIN_PROJECT"] = "git-buddy"
     all_components = ComponentInitializer(Config())
 
     rag_chain, retriever_chain = all_components.initialize_components()
