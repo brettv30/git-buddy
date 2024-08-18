@@ -5,10 +5,6 @@ from langchain.chains import (
     create_history_aware_retriever,
     create_retrieval_chain,
 )
-from langchain_core.prompts import (
-    MessagesPlaceholder,
-    ChatPromptTemplate,
-)
 from bs4 import BeautifulSoup as Soup
 from langchain_openai import ChatOpenAI
 from langchain_cohere import CohereRerank
@@ -26,11 +22,9 @@ from langchain_community.chat_message_histories import (
     StreamlitChatMessageHistory,
 )
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain.chains.combine_documents.base import DOCUMENTS_KEY
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.callbacks.manager import get_openai_callback
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
 
