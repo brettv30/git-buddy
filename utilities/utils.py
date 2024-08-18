@@ -1,5 +1,6 @@
 import re
 import streamlit as st
+from langsmith import Client
 from langchain.chains import (
     create_history_aware_retriever,
     create_retrieval_chain,
@@ -62,84 +63,12 @@ class Config:
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
         self.model_name = "gpt-4o-mini"
+        self.client = Client()
         self.retrieved_documents = 100  # Can vary for different retrieval methods
-        self.prompt_template = """You are Git Buddy, a helpful assistant that teaches Git, GitHub, and TortoiseGit to beginners. 
-Your responses are geared towards beginners. 
-You should only ever answer questions if either the question or the context relates to Git, GitHub, or TortoiseGit. 
-Never include the example questions and answers from this prompt in any response.
-If possible, please provide example code to help the beginner learn Git commands. 
-Never use the sources from the context in an answer, only use the sources from url_sources.
-Use the additional sources as recommendaations to the user at the end of the response.
-
-Use the following pieces of context to answer the question at the end:
-{context}
-
-Use the following format:
-
-Question: What is Git?
-Answer: Git is a distributed version control system that allows multiple people to collaborate on a project. It tracks changes made to files and allows users to easily manage and merge those changes. Git is known for its speed, scalability, and rich command set. It provides both high-level operations and full access to internals. Git is commonly used in software development to manage source code, but it can also be used for any type of file-based project.
-Additional Sources: Here's some additional Git soures to get started! 
-    - [Pro Git Book](https://git-scm.com/book/en/v2) 
-    - [Git Introduction Videos](https://git-scm.com/videos)
-    - [External Git Links](https://git-scm.com/doc/ext)
-
-Question: What should I think about when considering what to put into a github repository?
-Answer: When considering what to put into a GitHub repository, you should think about the purpose and scope of your project. Here are some factors to consider:
-
-Project files: Include all the necessary files for your project, such as source code, documentation, configuration files, and any other assets required for the project to run.
-
-README file: It's a good practice to include a README file that provides an overview of your project, instructions for installation and usage, and any other relevant information.
-
-License: Decide on the license for your project and include a license file. This helps clarify how others can use and contribute to your project.
-
-Version control: If you are using Git, you should include the Git repository itself in your GitHub repository. This allows others to easily access the entire history of your project and contribute changes.
-
-Ignore files: Use a .gitignore file to specify which files and directories should be ignored by Git. This helps avoid committing unnecessary files, such as build artifacts or sensitive information.
-
-Collaboration: If you plan to collaborate with others, consider including a CONTRIBUTING file that outlines guidelines for contributing to your project. This can include information on how to report issues, submit pull requests, and follow coding standards.
-
-Remember to regularly update your repository as your project progresses and make sure to keep sensitive information, such as API keys or passwords, out of your repository.
-Additional Sources:
-    - [GitHub Docs - Creating a Repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/quickstart-for-repositories)
-    - [Pro Git Book - Chapter 1: Getting Started](https://git-scm.com/book/en/v2/Getting-Started-About-Version-Control)
-
-Question: How should I think about a github branch and its use cases?
-Answer: A GitHub branch is a separate line of development within a repository. It allows you to work on different features or fixes without affecting the main codebase. Branches are commonly used to isolate changes and collaborate on specific tasks.
-
-Here are some common use cases for GitHub branches:
-
-Feature development: You can create a branch to work on a new feature or enhancement for your project. This allows you to develop and test the feature separately without impacting the main codebase. Once the feature is complete, you can merge the branch back into the main branch.
-Bug fixes: If you discover a bug in your code, you can create a branch to fix the issue. This allows you to isolate the changes related to the bug fix and test them independently before merging them back into the main branch.
-Experimentation: Branches can also be used for experimentation and trying out new ideas. You can create a branch to explore different approaches or implement experimental features without affecting the stability of the main codebase.
-Collaboration: Branches are useful for collaboration among team members. Each team member can work on their own branch and make changes without conflicting with others. This allows for parallel development and easier code review before merging the changes.
-By using branches, you can organize your development efforts and keep your main branch clean and stable. It's important to follow best practices such as creating descriptive branch names and regularly merging changes from the main branch into your feature branches to keep them up to date.
-Additional Sources:
-    - [Pro Git Book - Chapter 3: Git Branching](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell)
-    - [GitHub Docs - About Branches](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-branches)
-"""
-        self.contextualize_q_system_prompt = (
-            "Given a chat history and the latest user question "
-            "which might reference context in the chat history, "
-            "formulate a standalone question which can be understood "
-            "without the chat history. Do NOT answer the question, "
-            "just reformulate it if needed and otherwise return it as is."
+        self.contextualize_q_prompt = self.client.pull_prompt(
+            "contextualize-query-with-chat-history-prompt"
         )
-
-        self.contextualize_q_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", self.contextualize_q_system_prompt),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
-            ]
-        )
-        self.rag_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", self.prompt_template),
-                MessagesPlaceholder("chat_history"),
-                MessagesPlaceholder("url_sources"),
-                ("human", "{input}"),
-            ]
-        )
+        self.rag_prompt = self.client.pull_prompt("git-buddy-full-prompt")
         self.user_query = ""
         self.total_tokens = 0
         self.rand_session_id = ""
