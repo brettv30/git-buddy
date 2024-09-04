@@ -1,12 +1,8 @@
 import streamlit as st
-from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 import random
 import os
-from utilities.utils import (
-    Config,
-    ComponentInitializer,
-    APIHandler,
-)
+from utilities.utils import Config, ComponentInitializer, APIHandler, GitBuddyAgent
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -30,14 +26,16 @@ def set_up_components():
     # Generate a random 4-digit number with leading zeros
     api_handler.set_session_id(f"{random.randint(0, 9999):04}")
 
-    return api_handler
+    git_buddy = GitBuddyAgent()
+
+    return git_buddy
 
 
-api_handler = set_up_components()
+git_buddy = set_up_components()
 ctx = get_script_run_ctx()
 
 # Set unique session ID to store individual histories for each session
-api_handler.set_session_id(ctx.session_id)
+# api_handler.set_session_id(ctx.session_id)
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -61,7 +59,7 @@ for message in st.session_state.messages:
 
 # If last message is not from assistant, then respond
 if st.session_state.messages[-1]["role"] != "assistant":
-    st.chat_input("", disabled=True)
+    # st.chat_input("", disabled=True)
     # Stop someone from being silly
     if len(st.session_state.messages[-1]["content"]) > 1000:
         st.write(
@@ -82,25 +80,21 @@ if st.session_state.messages[-1]["role"] != "assistant":
     else:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                with st.status("Accessing Tools...", expanded=True) as status:
-                    api_handler.set_user_query(st.session_state.messages[-1]["content"])
-                    additional_sources = api_handler.find_additional_sources(
-                        st.session_state.messages[-1]["content"]
-                    )
-                    st.write("Making OpenAI API Request...")
-                    chat_response = api_handler.make_request_with_retry(
-                        additional_sources
-                    )
-                    status.update(
-                        label="Look here for a play-by-play...",
-                        state="complete",
-                        expanded=False,
-                    )
 
-                    if type(chat_response) is not str:
-                        st.error(chat_response)
-                    else:
-                        st.write(chat_response)
+                st.write_stream(
+                    git_buddy.stream(
+                        st.session_state.messages[-1]["content"], ctx.session_id
+                    )
+                )
+
+                chat_response = git_buddy.run(
+                    st.session_state.messages[-1]["content"], ctx.session_id
+                )["messages"][-1].content
+
+                if type(chat_response) is not str:
+                    st.error(chat_response)
+                else:
+                    st.write(chat_response)
 
                 message = {
                     "role": "assistant",
@@ -108,4 +102,4 @@ if st.session_state.messages[-1]["role"] != "assistant":
                 }
                 st.session_state.messages.append(message)
 
-    st.rerun()
+    # st.rerun()

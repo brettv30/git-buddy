@@ -27,6 +27,14 @@ from langchain_community.callbacks.manager import get_openai_callback
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph, MessagesState
+from langgraph.prebuilt import ToolNode
+from typing import Annotated, Literal, TypedDict
+from langgraph.prebuilt import create_react_agent
+
 
 class Config:
     """
@@ -53,6 +61,7 @@ class Config:
         self.openai_api_key = st.secrets["OPENAI_API_KEY"]
         self.pinecone_api_key = st.secrets["PINECONE_API_KEY"]
         self.cohere_api_key = st.secrets["COHERE_API_KEY"]
+        self.cohere_model = "rerank-english-v3.0"
         self.directory = "data"
         self.embeddings_model = "text-embedding-ada-002"
         self.index_name = "git-buddy-index"
@@ -66,6 +75,7 @@ class Config:
         self.user_query = ""
         self.total_tokens = 0
         self.rand_session_id = ""
+        self.top_docs = 5
 
 
 class DocumentManager:
@@ -237,7 +247,7 @@ class ComponentInitializer(Config):
         retriever = docsearch.as_retriever(
             search_type="mmr", search_kwargs={"k": self.config.retrieved_documents}
         )
-        compressor = CohereRerank(top_n=self.top_docs)
+        compressor = CohereRerank(model=self.config.cohere_model, top_n=self.top_docs)
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor, base_retriever=retriever
         )
@@ -287,6 +297,133 @@ class ComponentInitializer(Config):
             ].messages[-14:]
 
         return self.store[Config.rand_session_id]
+
+
+class GitBuddyAgent:
+    def __init__(self):
+        self.search = DuckDuckGoSearchRun()
+        self.config = Config()
+        self.temperature = 0.5
+
+        embeddings = OpenAIEmbeddings(model=self.config.embeddings_model)
+        docsearch = PineconeVectorStore.from_existing_index(
+            embedding=embeddings, index_name=self.config.index_name
+        )
+        retriever = docsearch.as_retriever(
+            search_type="mmr", search_kwargs={"k": self.config.retrieved_documents}
+        )
+        compressor = CohereRerank(
+            model=self.config.cohere_model, top_n=self.config.top_docs
+        )
+        self.compression_retriever = ContextualCompressionRetriever(
+            base_compressor=compressor, base_retriever=retriever
+        )
+        llm = ChatOpenAI(
+            model_name=self.config.model_name, temperature=self.temperature
+        )
+        tools = [self.internet_search, self.git_document_retriever]
+
+        tool_node = ToolNode(tools)
+
+        # Define a new graph
+        workflow = StateGraph(MessagesState)
+
+        # Define the two nodes we will cycle between
+        workflow.add_node("agent", self.call_model)
+        workflow.add_node("tools", tool_node)
+
+        # Set the entrypoint as `agent`
+        # This means that this node is the first one called
+        workflow.add_edge(START, "agent")
+
+        # We now add a conditional edge
+        workflow.add_conditional_edges(
+            # First, we define the start node. We use `agent`.
+            # This means these are the edges taken after the `agent` node is called.
+            "agent",
+            # Next, we pass in the function that will determine which node is called next.
+            self.should_continue,
+            # Finally we pass in a mapping.
+            # The keys are strings, and the values are other nodes.
+            # END is a special node marking that the graph should finish.
+            # What will happen is we will call `should_continue`, and then the output of that
+            # will be matched against the keys in this mapping.
+            # Based on which one it matches, that node will then be called.
+            {
+                # If `tools`, then we call the tool node.
+                "continue": "tools",
+                # Otherwise we finish.
+                "end": END,
+            },
+        )
+
+        # We now add a normal edge from `tools` to `agent`.
+        # This means that after `tools` is called, `agent` node is called next.
+        workflow.add_edge("tools", "agent")
+
+        # Initialize memory to persist state between graph runs
+        checkpointer = MemorySaver()
+
+        # Finally, we compile it!
+        # This compiles it into a LangChain Runnable,
+        # meaning you can use it as you would any other runnable.
+        # Note that we're (optionally) passing the memory when compiling the graph
+        self.app = workflow.compile(checkpointer=checkpointer)
+
+        self.model = llm.bind_tools(tools)
+        self.client = Client()
+        self.prompt = self.client.pull_prompt("git-buddy-sys-prompt")
+
+        self.graph = create_react_agent(
+            self.model, tools, state_modifier=self.prompt, checkpointer=checkpointer
+        )
+
+    @tool
+    def internet_search(self, query: str) -> str:
+        """
+        Search the internet for additional links and sources that can empower the user to learn more information related to their version control questions.
+        """
+        return self.search.run(query)
+
+    @tool
+    def git_document_retriever(self, query: str) -> str:
+        """
+        Retrieve documents from the pinecone vector database to assist with answering questions related to Git, GitHub, and TortoiseGit.
+        """
+        return self.compression_retriever.invoke(query)
+
+    # Define the function that determines whether to continue or not
+    def should_continue(self, state: MessagesState) -> Literal["tools", END]:
+        messages = state["messages"]
+        last_message = messages[-1]
+        # If there is no function call, then we finish
+        return "continue" if last_message.tool_calls else "end"
+
+    # Define the function that calls the model
+    def call_model(self, state: MessagesState):
+        messages = state["messages"]
+        response = self.model.invoke(messages)
+        # We return a list, because this will get added to the existing list
+        return {"messages": [response]}
+
+    def run(self, query: str, session_id: int) -> str:
+        """
+        Runs the GitBuddyAgent with the given query.
+        """
+        return self.graph.invoke(
+            {"messages": [HumanMessage(content=query)]},
+            config={"configurable": {"thread_id": session_id}},
+        )
+
+    def stream(self, query, session_id):
+        """
+        Streams the response from the GitBuddyAgent.
+        """
+        return self.graph.stream(
+            {"messages": [HumanMessage(content=query)]},
+            config={"configurable": {"thread_id": session_id}},
+            stream_mode="values",
+        )
 
 
 class APIHandler(Config):
@@ -450,11 +587,6 @@ class APIHandler(Config):
                     config={"configurable": {"session_id": "[001]"}},
                 )
         except Exception as e:
-            return f"Ran into an error while making a request to GPT 3.5-Turbo. The following error was raised {e}"
+            return f"Ran into an error while making the API request. The following error was raised {e}"
 
-        print(result["input"])
-        print(result["url_sources"])
-        print(result["chat_history"])
-        print(result["context"])
-        print(result["answer"])
         return result["answer"]
