@@ -5,6 +5,12 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Collection, Dict, List, Optional
 
+import sys
+import os
+
+# Append the repo directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from utilities.logger_utils import log
 
 SCHEDULING_INTERVAL = 0.01  # seconds

@@ -13,12 +13,12 @@ from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
 )
-from langchain.pydantic_v1 import (
+
+from pydantic import (
     BaseModel,
-    Extra,
     Field,
     create_model,
-    validate_arguments,
+    validate_arguments
 )
 from langchain.schema.runnable import RunnableConfig
 from langchain.tools import BaseTool
@@ -34,8 +34,8 @@ def _create_subset_model(
     """Create a pydantic model with only a subset of model's fields."""
     fields = {}
     for field_name in field_names:
-        field = model.__fields__[field_name]
-        fields[field_name] = (field.outer_type_, field.field_info)
+        field = model.model_fields[field_name]
+        fields[field_name] = (field.annotation, field.default)
     return create_model(name, **fields)  # type: ignore
 
 
@@ -44,7 +44,7 @@ def _get_filtered_args(
     func: Callable,
 ) -> dict:
     """Get the arguments from a function's signature."""
-    schema = inferred_model.schema()["properties"]
+    schema = inferred_model.model_json_schema()["properties"]
     valid_keys = signature(func).parameters
     return {k: schema[k] for k in valid_keys if k not in ("run_manager", "callbacks")}
 
@@ -52,7 +52,7 @@ def _get_filtered_args(
 class _SchemaConfig:
     """Configuration for the pydantic model."""
 
-    extra: Any = Extra.forbid
+    extra: Any = "forbid"
     arbitrary_types_allowed: bool = True
 
 
