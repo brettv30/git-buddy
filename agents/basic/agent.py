@@ -64,7 +64,7 @@ def chatbot(state: State):
 
 
 # Define the function that determines whether to continue or not
-def should_continue(state: MessagesState) -> Literal["tools", END]:
+def should_continue(state: MessagesState) -> Literal["tools", END]: # type: ignore
     messages = state["messages"]
     last_message = messages[-1]
     if last_message.tool_calls:
