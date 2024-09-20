@@ -1,13 +1,21 @@
 import streamlit as st
-from streamlit.runtime.scriptrunner import get_script_run_ctx
-import random
+from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
 import os
-from agents.llm_compiler.agent import LLMCompilerAgent  # Import the new agent class
+import sys
+
+# Append the repo directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
+
+from agents.basic.agent import (  # noqa: E402
+    set_graph_agent,
+    stream_data,
+)  # Import the modified agent class
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
 
 st.title("Git Buddy")
+
 
 # Initialize chatbot components
 @st.cache_resource
@@ -17,16 +25,15 @@ def set_up_components():
     os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
     os.environ["LANGCHAIN_PROJECT"] = "git-buddy"
 
-    # Create an instance of LLMCompilerAgent
-    git_buddy = LLMCompilerAgent()
+    agent = set_graph_agent()
+    return agent
 
-    return git_buddy
 
-git_buddy = set_up_components()
 ctx = get_script_run_ctx()
+git_buddy = set_up_components()
 
 # Initialize the chat messages history
-if "messages" not in st.session_state.keys():
+if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
@@ -45,47 +52,39 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# If last message is not from assistant, then respond
+# If the last message is not from assistant, then respond
 if st.session_state.messages[-1]["role"] != "assistant":
-    if len(st.session_state.messages[-1]["content"]) > 1000:
-        st.write(
-            "Your question is too long. Please ask your question again with fewer words."
+    user_message = st.session_state.messages[-1]["content"]
+    if len(user_message) > 1000:
+        assistant_message = (
+            "Your question is too long. Please reword it with fewer words."
         )
-        message = {
-            "role": "assistant",
-            "content": "Your question is too long. Please reword it with fewer words.",
-        }
-        st.session_state.messages.append(message)
-    elif len(st.session_state.messages[-1]["content"]) < 10:
-        st.write("Please ask a question with more words.")
-        message = {
-            "role": "assistant",
-            "content": "Please ask a question with more words.",
-        }
-        st.session_state.messages.append(message)
+        st.session_state.messages.append(
+            {"role": "assistant", "content": assistant_message}
+        )
+        with st.chat_message("assistant"):
+            st.write(assistant_message)
+    elif len(user_message) < 10:
+        assistant_message = "Please ask a question with more words."
+        st.session_state.messages.append(
+            {"role": "assistant", "content": assistant_message}
+        )
+        with st.chat_message("assistant"):
+            st.write(assistant_message)
     else:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                # Use the stream method of LLMCompilerAgent
-                response_stream = git_buddy.stream(
-                    st.session_state.messages[-1]["content"], ctx.session_id
+                response_messages = git_buddy.invoke(
+                    {"messages": [("user", user_message)]},
+                    config={"configurable": {"thread_id": ctx.session_id}},
                 )
-                
-                # Display the streaming response
-                response_container = st.empty()
-                full_response = ""
-                for chunk in response_stream:
-                    if "messages" in chunk and chunk["messages"]:
-                        content = chunk["messages"][-1].content
-                        full_response += content
-                        response_container.markdown(full_response + "▌")
-                response_container.markdown(full_response)
+
+                st.write(stream_data(response_messages["messages"][-1].content))
 
                 # Add the full response to the chat history
-                message = {
-                    "role": "assistant",
-                    "content": full_response,
-                }
-                st.session_state.messages.append(message)
-
-    # st.rerun()
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response_messages["messages"][-1].content,
+                    }
+                )
