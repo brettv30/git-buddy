@@ -52,6 +52,7 @@ def document_retriever(query: str):
     """Call to retrieve documents related to Git, GitHub, and TortoiseGit Documentation"""
     return compression_retriever.invoke(query)
 
+
 @tool
 def github_repo_summarization(query: str):
     """Call to summarize a github repository. The input should be a link to a github repository that the user submits"""
@@ -72,7 +73,7 @@ def chatbot(state: State):
 
 
 # Define the function that determines whether to continue or not
-def should_continue(state: MessagesState) -> Literal["tools", END]: # type: ignore
+def should_continue(state: MessagesState) -> Literal["tools", END]:  # type: ignore
     messages = state["messages"]
     last_message = messages[-1]
     if not last_message.tool_calls:
@@ -80,8 +81,10 @@ def should_continue(state: MessagesState) -> Literal["tools", END]: # type: igno
     else:
         return "continue"
 
+
 def filter_messages(messages: list):
     return messages[-14:]
+
 
 def set_graph_agent():
     workflow = StateGraph(State)
@@ -92,12 +95,7 @@ def set_graph_agent():
     workflow.add_edge(START, "agent")
 
     workflow.add_conditional_edges(
-        "agent",
-        should_continue,
-        {
-            "continue": "tools",
-            "end": END
-        }
+        "agent", should_continue, {"continue": "tools", "end": END}
     )
 
     workflow.add_conditional_edges(
