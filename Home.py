@@ -25,7 +25,7 @@ Git Buddy utilizes the following tools:
 - [Langchain](https://www.langchain.com) to orchestrate
 - [Pinecone](https://www.pinecone.io) to store document embeddings
 - [Cohere](https://cohere.com) to rerank retrieved documents
-- [OpenAI](https://openai.com) to supply the LLM (GPT-3.5-Turbo)
+- [OpenAI](https://openai.com) to supply the LLM (GPT-4o-mini)
 - [Streamlit](https://streamlit.io) to deliver the application
 
 Git Buddy follows a Retrieval Augmented Generation (RAG) with reranking framework which allows for additional relevant context to be included in a prompt before passing the prompt to the LLM. The documents stored for retrieval can be found in `Additional Resources - Documentation`. RAG is essential for enhancing LLMs in app development. It supplements LLMs with external data sources, helping arrive at more relevant responses by reducing errors or hallucinations. RAG determines what info is relevant to the user's query through semantic search, which searches data by meaning (rather than just looking for literal matches of search terms). RAG is particularly effective for LLM apps that need to access domain-specific or proprietary data. 

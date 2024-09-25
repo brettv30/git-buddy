@@ -13,6 +13,7 @@ from langchain_cohere import CohereRerank
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain.retrievers import ContextualCompressionRetriever
+from utilities import repototxt
 
 DDRSearch = DuckDuckGoSearchRun()
 
@@ -51,6 +52,11 @@ def document_retriever(query: str):
     """Call to retrieve documents related to Git, GitHub, and TortoiseGit Documentation"""
     return compression_retriever.invoke(query)
 
+@tool
+def github_repo_summarization(query: str):
+    """Call to summarize a github repository. The input should be a link to a github repository that the user submits"""
+    repototxt.set_github_token()
+
 
 tools = [search, document_retriever]
 
@@ -60,17 +66,22 @@ llm_with_tools = ChatOpenAI(model=openai_model, temperature=0).bind_tools(tools)
 
 
 def chatbot(state: State):
-    return {"messages": [llm_with_tools.invoke(state["messages"])]}
+    messages = filter_messages(state["messages"])
+    response = llm_with_tools.invoke(messages)
+    return {"messages": response}
 
 
 # Define the function that determines whether to continue or not
 def should_continue(state: MessagesState) -> Literal["tools", END]: # type: ignore
     messages = state["messages"]
     last_message = messages[-1]
-    if last_message.tool_calls:
-        return "tools"
-    return END
+    if not last_message.tool_calls:
+        return "end"
+    else:
+        return "continue"
 
+def filter_messages(messages: list):
+    return messages[-14:]
 
 def set_graph_agent():
     workflow = StateGraph(State)
@@ -83,6 +94,10 @@ def set_graph_agent():
     workflow.add_conditional_edges(
         "agent",
         should_continue,
+        {
+            "continue": "tools",
+            "end": END
+        }
     )
 
     workflow.add_conditional_edges(
