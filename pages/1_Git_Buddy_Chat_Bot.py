@@ -6,10 +6,8 @@ import sys
 # Append the repo directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
 
-from agents.basic.agent import (  # noqa: E402
-    set_graph_agent,
-    stream_data,
-)  # Import the modified agent class
+from agents.basic.agent import GitBuddyAgentManager  # noqa: E402
+from utilities.utils import stream_data # noqa: E402
 
 # Start Streamlit app
 st.set_page_config(page_title="Git Buddy")
@@ -25,7 +23,7 @@ def set_up_components():
     os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
     os.environ["LANGCHAIN_PROJECT"] = "git-buddy"
 
-    agent = set_graph_agent()
+    agent = GitBuddyAgentManager.set_graph_agent()
     return agent
 
 

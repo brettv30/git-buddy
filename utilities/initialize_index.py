@@ -1,6 +1,7 @@
 import time
 from pinecone import Pinecone
-from utils import DocumentManager, Config
+from utils import DocumentManager
+from agents.basic.agent import Config
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
