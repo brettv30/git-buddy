@@ -60,19 +60,34 @@ class GitBuddyToolkit(Config):
 
     @tool
     def search(query: str):
-        """Call to to find additional sources related to Git, GitHub, and TortoiseGit"""
+        """Call to to find additional sources related to Git, GitHub, and TortoiseGit.
+        Only use this tool when you need to include additional sources related to Git, GitHub, and TortoiseGit in your response to the user
+        """
         return GitBuddyToolkit.ddr_search.run(query)
 
 
     @tool
     def document_retriever(query: str):
-        """Call to retrieve documents related to Git, GitHub, and TortoiseGit Documentation"""
+        """Call to retrieve documents related to Git, GitHub, and TortoiseGit Documentation.
+        Use this tool every time you need to supplement your knowledge base with the ground facts related to Git, GitHub, and TortoiseGit.
+        """
         return GitBuddyToolkit.compression_retriever.invoke(query)
-
+    
+    @tool
+    def check_for_github_repository_link():
+        """Call this tool on every user input to see if they shared a github repository link that we need to summarize"""
+        github_repo_link_schema = {}
+        # Create a quick prompt
+        # Pass the schema and prompt to the LLM
+        # Call the LLM and get the structured response
+        # Return the response
+        pass
 
     @tool
     def github_repo_summarization(query: str):
-        """Call to summarize a github repository. The input should be a link to a github repository that the user submits"""
+        """Call to summarize a github repository. The input should be a link to a github repository that the user submits
+        Always use this tool when the user includes a link to a github repository in their message to you. 
+        """
         repototxt.set_github_token()
 
 
