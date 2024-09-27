@@ -6,3 +6,6 @@ __pycache__/
 
 # logs 
 log.txt
+
+# secrets
+.streamlit/
