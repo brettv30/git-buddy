@@ -15,8 +15,7 @@ from langchain_community.document_loaders import (
     RecursiveUrlLoader,
     DirectoryLoader,
 )
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_core.messages.utils import convert_to_messages
+from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_community.chat_message_histories import (
     StreamlitChatMessageHistory,
@@ -45,7 +44,6 @@ class Config:
         contextualize_q_system_prompt (str): The system prompt for the contextualize_q model.
         contextualize_q_prompt (ChatPromptTemplate): The prompt template for the contextualize_q model.
         rag_prompt (ChatPromptTemplate): The prompt template for the RAG model.
-        user_query (str): The current user query.
         total_tokens (int): The total number of tokens used in the current session.
     """
 
@@ -63,9 +61,7 @@ class Config:
             "contextualize-query-with-chat-history-prompt"
         )
         self.rag_prompt = self.client.pull_prompt("git-buddy-full-prompt")
-        self.user_query = ""
         self.total_tokens = 0
-        self.rand_session_id = ""
 
 
 class DocumentManager:
@@ -272,21 +268,11 @@ class ComponentInitializer(Config):
         Returns:
             BaseChatMessageHistory: The chat message history for the given session.
         """
-
-        if Config.rand_session_id not in self.store:
-            self.store[Config.rand_session_id] = StreamlitChatMessageHistory()
-
-        print(
-            "Length of Chat History: ", len(self.store[Config.rand_session_id].messages)
-        )
-        if (
-            len(self.store[Config.rand_session_id].messages) > 16
-        ):  # Only keep the 7 most recent chat history messages at any time
-            self.store[Config.rand_session_id].messages = self.store[
-                Config.rand_session_id
-            ].messages[-14:]
-
-        return self.store[Config.rand_session_id]
+        if session_id not in self.store:
+            self.store[session_id] = StreamlitChatMessageHistory()
+        elif session_id in self.store and len(self.store[session_id].messages) > 16:
+                self.store[session_id].messages = self.store[session_id].messages[-14:]
+        return self.store[session_id]
 
 
 class APIHandler(Config):
@@ -305,33 +291,11 @@ class APIHandler(Config):
     def __init__(self, chain, retriever_chain, max_retries=5):
         self.conf_obj = Config()
         self.comp_obj = ComponentInitializer(self.conf_obj)
-        self.search = DuckDuckGoSearchRun()
+        self.search = DuckDuckGoSearchResults()
         self.max_retries = max_retries
         self.chain = chain
         self.retriever_chain = retriever_chain
         self.total_tokens = 0
-
-    @staticmethod
-    def set_user_query(query):
-        """
-        Sets the user's query for the application.
-
-        Args:
-            query (str): The user's query to be processed by the application.
-        """
-
-        Config.user_query = query
-
-    @staticmethod
-    def set_session_id(id):
-        """
-        Sets the user's query for the application.
-
-        Args:
-            query (str): The user's query to be processed by the application.
-        """
-
-        Config.rand_session_id = id
 
     def find_additional_sources(self, query) -> list:
         """
@@ -369,8 +333,8 @@ class APIHandler(Config):
                 st.write("Searching for Additional Sources...")
 
                 url_list = [
-                    self.parse_urls(self.search.run(f"{query} {link}"))
-                    for link in search_list
+                    self.parse_urls(self.search.invoke(f"{query} {link}"))
+                    for link in search_list 
                 ]
 
             else:
@@ -406,7 +370,7 @@ class APIHandler(Config):
             "https://debfaq.com/using-tortoisemerge-as-your-git-merge-tool-on-windows/",
         ]  # URLs with known issues
         interim_url_list = [
-            element for element in dup_url_list if element not in urls_to_remove
+            element.replace("link: ", "") for element in dup_url_list if element.replace("link: ", "") not in urls_to_remove
         ]
         clean_url_list = list(set(interim_url_list))
 
@@ -423,10 +387,10 @@ class APIHandler(Config):
         Returns:
             list: A list of extracted URLs.
         """
-        pattern = r"https://[^\]]+"
+        pattern = r"link: https://[^\]]+"
         return re.findall(pattern, search_results)
 
-    def make_request_with_retry(self, additional_sources):
+    def make_request_with_retry(self, user_input, additional_sources, session_id):
         """
         Makes a request to the chain with retries in case of exceptions.
 
@@ -444,17 +408,12 @@ class APIHandler(Config):
             with get_openai_callback() as cb:
                 result = self.chain.invoke(
                     {
-                        "input": st.session_state.messages[-1]["content"],
-                        "url_sources": convert_to_messages(additional_sources),
+                        "input": user_input,
+                        "url_sources": additional_sources,
                     },
-                    config={"configurable": {"session_id": "[001]"}},
+                    config={"configurable": {"session_id": f"{session_id}"}},
                 )
         except Exception as e:
-            return f"Ran into an error while making a request to GPT 3.5-Turbo. The following error was raised {e}"
+            return f"Ran into an error while making a request to GPT-4o-mini. The following error was raised {e}"
 
-        print(result["input"])
-        print(result["url_sources"])
-        print(result["chat_history"])
-        print(result["context"])
-        print(result["answer"])
         return result["answer"]

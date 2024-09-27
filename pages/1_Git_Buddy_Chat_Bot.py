@@ -27,17 +27,11 @@ def set_up_components():
 
     api_handler = APIHandler(rag_chain, retriever_chain)
 
-    # Generate a random 4-digit number with leading zeros
-    api_handler.set_session_id(f"{random.randint(0, 9999):04}")
-
     return api_handler
 
 
 api_handler = set_up_components()
 ctx = get_script_run_ctx()
-
-# Set unique session ID to store individual histories for each session
-api_handler.set_session_id(ctx.session_id)
 
 # Initialize the chat messages history
 if "messages" not in st.session_state.keys():
@@ -83,13 +77,14 @@ if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 with st.status("Accessing Tools...", expanded=True) as status:
-                    api_handler.set_user_query(st.session_state.messages[-1]["content"])
                     additional_sources = api_handler.find_additional_sources(
                         st.session_state.messages[-1]["content"]
                     )
                     st.write("Making OpenAI API Request...")
                     chat_response = api_handler.make_request_with_retry(
-                        additional_sources
+                        st.session_state.messages[-1]["content"],
+                        additional_sources, 
+                        ctx.session_id
                     )
                     status.update(
                         label="Look here for a play-by-play...",
